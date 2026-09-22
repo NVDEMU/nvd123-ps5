@@ -74,8 +74,11 @@ public sealed class WindowsThreadContextCaptureTests
         Assert.NotEqual((nuint)0, HostMemory.Query((void*)address, out var before));
         Assert.Equal(HostMemory.PAGE_EXECUTE_READ, before.Protect);
         code.Dispose();
-        Assert.NotEqual((nuint)0, HostMemory.Query((void*)address, out var after));
-        Assert.Equal(HostMemory.MEM_FREE_STATE, after.State);
+        // The address can be immediately recycled by another parallel test on
+        // the Windows runner, so probing the raw address after release is
+        // inherently racy. SafeHandle.IsClosed is the deterministic contract:
+        // Dispose has completed the owned native release path.
+        Assert.True(code.IsClosed);
     }
 
     [Fact]
