@@ -50,7 +50,7 @@ jobs:
         run: |
           short_sha="${GITHUB_SHA::7}"
           safe_ref="$(echo "${GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]' | sed 's#[^a-z0-9._-]#-#g')"
-          version="$(python3 -c 'import sys, xml.etree.ElementTree as ET; version = ET.parse("Directory.Build.props").getroot().findtext(".//SharpEmuVersion"); sys.exit("Directory.Build.props is missing SharpEmuVersion") if not version or not version.strip() else print(version.strip())')"
+          version="$(python3 -c 'import sys, xml.etree.ElementTree as ET; version = ET.parse("Directory.Build.props").getroot().findtext(".//SharpEmuVersion"); sys.exit("Directory.Build.props is missing SharpEmuVersion") if not version else print(version)')"
           release_tag="v${version}"
           release_name="NVDS5 v${version}"
 
@@ -229,13 +229,34 @@ jobs:
           test -s "$GITHUB_WORKSPACE/artifacts/release-assets/nvds5-${VERSION}-osx-x64.zip"
           test -s "$GITHUB_WORKSPACE/artifacts/release-assets/nvds5-${VERSION}-osx-x64.dmg"
 
+      # Stage the executable at the artifact root. This ensures that
+      # download-artifact recreates:
+      #
+      #   release/nvds5-linux-x64-SHORT_SHA/SharpEmu
+      #
+      # instead of nesting it under publish/linux-x64/.
+      - name: Stage release artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          staging="$GITHUB_WORKSPACE/artifacts/staged/${{ matrix.rid }}"
+          rm -rf "$staging"
+          mkdir -p "$staging"
+
+          cp -a "$PUBLISH_DIR"/. "$staging"/
+
+          if [ "${{ matrix.rid }}" = "osx-x64" ]; then
+            cp -a "$GITHUB_WORKSPACE/artifacts/release-assets" "$staging/"
+          fi
+
+          test -f "$staging/SharpEmu"
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
           name: nvds5-${{ matrix.rid }}-${{ needs.init.outputs.short-sha }}
-          path: |
-            ${{ env.PUBLISH_DIR }}
-            ${{ github.workspace }}/artifacts/release-assets
+          path: ${{ github.workspace }}/artifacts/staged/${{ matrix.rid }}
           if-no-files-found: error
           include-hidden-files: true
 
@@ -273,12 +294,17 @@ jobs:
           win_dir="release/nvds5-win-x64-${SHORT_SHA}"
           linux_dir="release/nvds5-linux-x64-${SHORT_SHA}"
           macos_dir="release/nvds5-osx-x64-${SHORT_SHA}"
+
           for package_dir in "${win_dir}" "${linux_dir}" "${macos_dir}"; do
             test -d "${package_dir}"
           done
 
           mkdir -p release-assets
-          (cd "${win_dir}" && zip -q -r "../../release-assets/nvds5-${VERSION}-win-x64.zip" .)
+
+          (
+            cd "${win_dir}"
+            zip -q -r "../../release-assets/nvds5-${VERSION}-win-x64.zip" .
+          )
 
           chmod +x "${linux_dir}/SharpEmu"
           tar -czf "release-assets/nvds5-${VERSION}-linux-x64.tar.gz" -C "${linux_dir}" .
@@ -286,6 +312,7 @@ jobs:
           macos_release_dir="release/nvds5-osx-x64-${SHORT_SHA}/release-assets"
           test -s "${macos_release_dir}/nvds5-${VERSION}-osx-x64.zip"
           test -s "${macos_release_dir}/nvds5-${VERSION}-osx-x64.dmg"
+
           cp "${macos_release_dir}/nvds5-${VERSION}-osx-x64.zip" release-assets/
           cp "${macos_release_dir}/nvds5-${VERSION}-osx-x64.dmg" release-assets/
 
@@ -353,6 +380,7 @@ jobs:
           RELEASE_TAG: ${{ needs.init.outputs.release-tag }}
         run: |
           mapfile -t assets < <(find release-assets -maxdepth 1 -type f \( -name '*.zip' -o -name '*.tar.gz' \) | sort)
+
           if [ "${#assets[@]}" -ne 4 ]; then
             echo "Expected 4 release assets, found ${#assets[@]}." >&2
             exit 1
@@ -360,9 +388,11 @@ jobs:
 
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             echo "Release ${RELEASE_TAG} already exists; updating it with the new assets."
+
             gh release edit "${RELEASE_TAG}" \
               --title "${RELEASE_NAME}" \
               --notes-file release-notes.md
+
             gh release upload "${RELEASE_TAG}" "${assets[@]}" --clobber
           else
             gh release create "${RELEASE_TAG}" "${assets[@]}" \
