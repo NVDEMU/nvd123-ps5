@@ -275,6 +275,12 @@ public partial class MainWindow : Window
         };
         AutoUpdateToggle.IsCheckedChanged += (_, _) =>
             _settings.CheckForUpdatesOnStartup = AutoUpdateToggle.IsChecked == true;
+        UpdateChannelBox.SelectionChanged += (_, _) =>
+        {
+            _settings.UpdateChannel = SelectedComboText(UpdateChannelBox, "Stable");
+            _availableUpdate = null;
+            SetUpdateStatus("Updater.Status.Ready", BuildInfo.CommitSha ?? "dev");
+        };
         WindowModeBox.SelectionChanged += (_, _) => _settings.WindowMode = SelectedComboText(WindowModeBox, "Windowed");
         DisplayBox.SelectionChanged += (_, _) => OnHostDisplayChanged();
         ResolutionBox.SelectionChanged += (_, _) => OnHostResolutionChanged();
@@ -1247,6 +1253,7 @@ public partial class MainWindow : Window
         SetLibraryLayout(string.Equals(_settings.LibraryLayout, "Grid", StringComparison.OrdinalIgnoreCase));
         DiscordToggle.IsChecked = _settings.DiscordRichPresence;
         AutoUpdateToggle.IsChecked = _settings.CheckForUpdatesOnStartup;
+        UpdateChannelBox.SelectedIndex = ChoiceIndex(_settings.UpdateChannel, "Stable", "Nightly");
         PerformanceProfileToggle.IsChecked = _settings.EnvironmentToggles.Contains("SHARPEMU_PROFILE_PERFORMANCE");
         PerformanceFrameTraceToggle.IsChecked = _settings.EnvironmentToggles.Contains("SHARPEMU_PROFILE_PERFORMANCE_FRAME_TRACE");
         StrictComputeToggle.IsChecked = StrictComputeSettings.IsEnabled(_settings.EnvironmentToggles);
@@ -1272,6 +1279,11 @@ public partial class MainWindow : Window
         OverlayCornerBox.SelectedIndex = ChoiceIndex(_settings.OverlayCorner, "TopLeft", "TopRight", "BottomRight", "BottomLeft");
         UpdateLogFilePathText();
     }
+
+    private Updater.UpdateChannel SelectedUpdateChannel() =>
+        string.Equals(_settings.UpdateChannel, "Nightly", StringComparison.OrdinalIgnoreCase)
+            ? Updater.UpdateChannel.Nightly
+            : Updater.UpdateChannel.Stable;
 
     private static string SelectedComboText(ComboBox comboBox, string fallback) =>
         comboBox.SelectedItem switch
@@ -1434,7 +1446,7 @@ public partial class MainWindow : Window
         SetUpdateStatus("Updater.Status.Checking");
         try
         {
-            _availableUpdate = await Updater.CheckAsync(BuildInfo.CommitSha);
+            _availableUpdate = await Updater.CheckAsync(BuildInfo.CommitSha, SelectedUpdateChannel());
             SetUpdateStatus(
                 _availableUpdate is null ? "Updater.Status.Current" : "Updater.Status.Available",
                 _availableUpdate?.Sha ?? BuildInfo.CommitSha ?? "dev");
