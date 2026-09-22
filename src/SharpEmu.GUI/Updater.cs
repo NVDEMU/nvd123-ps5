@@ -1,4 +1,4 @@
-// Copyright (C) 2026 SharpEmu Emulator Project
+// Copyright (C) 2026 NVDS5 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 using System.Diagnostics;
@@ -16,8 +16,8 @@ namespace SharpEmu.GUI;
 /// <summary>Self-contained Windows updater; the emulator layers do not depend on it.</summary>
 public static class Updater
 {
-    private const string ApplyArgument = "--sharpemu-apply-update";
-    private const string LatestReleaseUrl = "https://api.github.com/repos/sharpemu/sharpemu/releases/latest";
+    private const string ApplyArgument = "--nvds5-apply-update";
+    private const string LatestReleaseUrl = "https://api.github.com/repos/NVDEMU/nvd123-ps5/releases/latest";
     private static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(10);
     private static readonly HttpClient Http = CreateHttpClient();
 
@@ -63,7 +63,7 @@ public static class Updater
         IProgress<int>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        var root = Path.Combine(Path.GetTempPath(), "SharpEmu.Update");
+        var root = Path.Combine(Path.GetTempPath(), "NVDS5.Update");
         var payload = Path.Combine(root, "payload");
         if (Directory.Exists(root))
         {
@@ -138,7 +138,7 @@ public static class Updater
             return false;
         }
 
-        var backup = Path.Combine(Path.GetTempPath(), $"SharpEmu.UpdateBackup-{Environment.ProcessId}");
+        var backup = Path.Combine(Path.GetTempPath(), $"NVDS5.UpdateBackup-{Environment.ProcessId}");
         var changed = new List<(string Destination, string? Backup)>();
         try
         {
@@ -148,7 +148,7 @@ public static class Updater
                 {
                     if (!Process.GetProcessById(oldPid).WaitForExit(30_000))
                     {
-                        throw new TimeoutException("SharpEmu did not close within 30 seconds.");
+                        throw new TimeoutException("NVDS5 did not close within 30 seconds.");
                     }
                 }
                 catch (ArgumentException)
@@ -193,7 +193,7 @@ public static class Updater
             {
                 UseShellExecute = false,
                 WorkingDirectory = target,
-            }) ?? throw new InvalidOperationException("The updated SharpEmu could not be started.");
+            }) ?? throw new InvalidOperationException("The updated NVDS5 could not be started.");
             TryDeleteDirectory(backup);
         }
         catch (Exception ex)
@@ -293,7 +293,7 @@ public static class Updater
         string releaseSha,
         CancellationToken cancellationToken)
     {
-        var url = $"https://api.github.com/repos/sharpemu/sharpemu/compare/{currentSha}...{releaseSha}";
+        var url = $"https://api.github.com/repos/NVDEMU/nvd123-ps5/compare/{currentSha}...{releaseSha}";
         using var response = await Http.GetAsync(url, cancellationToken);
         response.EnsureSuccessStatusCode();
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
@@ -390,7 +390,7 @@ public static class Updater
     private static HttpClient CreateHttpClient()
     {
         var client = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
-        client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("SharpEmu", "0.0.1"));
+        client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("NVDS5", "0.0.4"));
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         return client;
     }
@@ -404,7 +404,7 @@ public static class Updater
 
         if (OperatingSystem.IsWindows()) return new("win-x64", ".zip", "SharpEmu.exe");
         if (OperatingSystem.IsLinux()) return new("linux-x64", ".tar.gz", "SharpEmu");
-        if (OperatingSystem.IsMacOS()) return new("osx-x64", ".tar.gz", "SharpEmu");
+        if (OperatingSystem.IsMacOS()) return new("osx-x64", ".zip", "SharpEmu");
         throw new PlatformNotSupportedException();
     }
 
