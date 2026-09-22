@@ -1,5 +1,5 @@
 <!--
-Copyright (C) 2026 SharpEmu Emulator Project
+Copyright (C) 2026 NVDS5 Emulator Project
 SPDX-License-Identifier: GPL-2.0-or-later
 -->
 
@@ -8,7 +8,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
         xmlns:local="clr-namespace:SharpEmu.GUI"
         xmlns:settingsControls="using:SharpEmu.GUI.Controls.Settings"
         x:Class="SharpEmu.GUI.MainWindow"
-        Title="SharpEmu"
+        Title="NVDS5"
         Width="1280" Height="820"
         MinWidth="980" MinHeight="640"
         WindowState="Maximized"
@@ -74,7 +74,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
       <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0" VerticalAlignment="Center">
         <Image Source="avares://SharpEmu.GUI/Assets/SharpEmu.ico" Width="20" Height="20"
                RenderOptions.BitmapInterpolationMode="HighQuality" />
-        <TextBlock Text="SharpEmu" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+        <TextBlock Text="NVDS5" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
         <Border Classes="pill">
           <TextBlock x:Name="VersionText" Text="v0.0.1" FontSize="11" Foreground="{StaticResource MutedBrush}" />
         </Border>
