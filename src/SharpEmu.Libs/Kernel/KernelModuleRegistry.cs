@@ -20,6 +20,7 @@ public static class KernelModuleRegistry
     private static readonly object _gate = new();
     private static readonly Dictionary<int, ModuleEntry> _modulesByHandle = new();
     private static readonly Dictionary<int, Dictionary<string, ulong>> _symbolsByHandle = new();
+    private static readonly Dictionary<string, ulong> _globalSymbols = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, int> _handleByPath = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, int> _handleByName = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<int, int> _sysmoduleHandleById = new();
@@ -63,6 +64,7 @@ public static class KernelModuleRegistry
         {
             _modulesByHandle.Clear();
             _symbolsByHandle.Clear();
+            _globalSymbols.Clear();
             _handleByPath.Clear();
             _handleByName.Clear();
             _sysmoduleHandleById.Clear();
@@ -336,6 +338,7 @@ public static class KernelModuleRegistry
                 if (!string.IsNullOrWhiteSpace(name) && address >= 0x10000)
                 {
                     destination.TryAdd(name, address);
+                    _globalSymbols.TryAdd(name, address);
                 }
             }
         }
@@ -351,8 +354,19 @@ public static class KernelModuleRegistry
 
         lock (_gate)
         {
-            return _symbolsByHandle.TryGetValue(handle, out var symbols) &&
-                   symbols.TryGetValue(symbolName, out address) &&
+            if (_symbolsByHandle.TryGetValue(handle, out var symbols) &&
+                symbols.TryGetValue(symbolName, out address) &&
+                address >= 0x10000)
+            {
+                return true;
+            }
+
+            // Some PS5 Unity titles pass a loader-owned handle that is not the
+            // same registry handle assigned when the corresponding image was
+            // loaded. The symbol itself is still unambiguous in the loaded image.
+            // Fall back to the global loaded-symbol index rather than reporting a
+            // false dlsym miss.
+            return _globalSymbols.TryGetValue(symbolName, out address) &&
                    address >= 0x10000;
         }
     }
