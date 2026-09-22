@@ -62,6 +62,9 @@ public sealed class GuiSettings
 
     public bool CheckForUpdatesOnStartup { get; set; } = true;
 
+    /// <summary>Release channel used by the in-app updater: Stable or Nightly.</summary>
+    public string UpdateChannel { get; set; } = "Stable";
+
     public string WindowMode { get; set; } = "Windowed";
 
     public string Resolution { get; set; } = "1920x1080";
@@ -143,6 +146,7 @@ public sealed class GuiSettings
         settings.DefaultProfile = NormalizeDefaultProfile(
             legacyProfile is { Length: 2 } ? legacyProfile[1] : settings.DefaultProfile);
         settings.DiscordClientId ??= "1525606762248540221";
+        settings.UpdateChannel = NormalizeChoice(settings.UpdateChannel, "Stable", "Nightly");
         settings.LibraryLayout = NormalizeChoice(settings.LibraryLayout, "Carousel", "Grid");
         settings.WindowMode = NormalizeChoice(settings.WindowMode, "Windowed", "Borderless", "Exclusive");
         settings.Resolution = NormalizeResolution(settings.Resolution);
