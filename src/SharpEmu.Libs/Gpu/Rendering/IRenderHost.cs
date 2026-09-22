@@ -154,7 +154,9 @@ public interface IRenderHost
 
     void ShaderWriteHazardBarrier();
 
-    // Orders a compute dispatch before later work. Read-only dispatches need execution ordering but\n    // can skip the global memory visibility operation, reducing synchronization overhead.\n    void ShaderAccessBarrier(bool writesMemory = true);
+    // Orders a compute dispatch before later work. Read-only dispatches need execution ordering but
+    // can skip the global memory visibility operation, reducing synchronization overhead.
+    void ShaderAccessBarrier(bool writesMemory = true);
 
     // Clears the bound color targets to one colour in place of the draw.
     void ClearColorTargets(ReadOnlySpan<ColorTargetState> targets, SolidColorClear clear);
