@@ -330,7 +330,7 @@ internal sealed class RecordingRenderHost : IRenderHost
 
     public void ShaderWriteHazardBarrier() => Calls.Add("write_hazard_barrier");
 
-    public void ShaderAccessBarrier() => Calls.Add("access_barrier");
+    public void ShaderAccessBarrier(bool writesMemory = true) => Calls.Add($"access_barrier writes={writesMemory}");
 
     public bool RetainTargetlessDraws { get; set; }
 
