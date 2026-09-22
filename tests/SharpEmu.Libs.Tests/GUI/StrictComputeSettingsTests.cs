@@ -59,13 +59,13 @@ public sealed class StrictComputeSettingsTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void ExplicitGameChoiceIsComparedWithTheEnabledDefault(bool gameEnabled)
+    public void ExplicitGameChoiceIsComparedWithTheDisabledDefault(bool gameEnabled)
     {
         var global = new GuiSettings();
         var game = new PerGameSettings { EnvironmentToggles = [.. global.EnvironmentToggles] };
         StrictComputeSettings.SetEnabled(game.EnvironmentToggles, gameEnabled);
         game.RemoveInheritedValues(global);
-        Assert.Equal(gameEnabled, game.IsEmpty);
+        Assert.Equal(!gameEnabled, game.IsEmpty);
         Assert.Equal(gameEnabled, StrictComputeSettings.IsEnabled(
             EffectiveLaunchSettings.Resolve(global, game).EnvironmentToggles));
     }
