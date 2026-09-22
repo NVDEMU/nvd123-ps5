@@ -28,6 +28,14 @@ public sealed class ComputeRejectionPolicyTests
     [InlineData("invalid", true)]
     public void ComputeRejectionUsesTheConfiguredPolicy(string? value, bool rejectPlan)
     {
+        lock (SchedulingStateCollection.GlobalStateLock)
+        {
+            RunComputeRejectionUsesTheConfiguredPolicy(value, rejectPlan);
+        }
+    }
+
+    private static void RunComputeRejectionUsesTheConfiguredPolicy(string? value, bool rejectPlan)
+    {
         var previous = Environment.GetEnvironmentVariable(Variable);
         try
         {
