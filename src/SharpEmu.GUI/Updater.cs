@@ -17,25 +17,30 @@ namespace SharpEmu.GUI;
 public static class Updater
 {
     private const string ApplyArgument = "--nvds5-apply-update";
-    private const string LatestReleaseUrl = "https://api.github.com/repos/NVDEMU/nvd123-ps5/releases/latest";
+    private const string LatestStableReleaseUrl = "https://api.github.com/repos/NVDEMU/nvd123-ps5/releases/latest";
+    private const string LatestNightlyReleaseUrl = "https://api.github.com/repos/NVDEMU/nvd123-ps5/releases/tags/nightly";
     private static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(10);
     private static readonly HttpClient Http = CreateHttpClient();
 
-    public sealed record UpdateInfo(string Sha, string Name, string DownloadUrl, long Size, string Sha256, string TagName);
+    public enum UpdateChannel { Stable, Nightly }
 
-    public static async Task<UpdateInfo?> CheckAsync(string? currentSha, CancellationToken cancellationToken = default)
+    public sealed record UpdateInfo(string Sha, string Name, string DownloadUrl, long Size, string Sha256, string TagName, UpdateChannel Channel);
+
+    public static async Task<UpdateInfo?> CheckAsync(string? currentSha, UpdateChannel channel, CancellationToken cancellationToken = default)
     {
         var platform = CurrentPlatform();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(CheckTimeout);
 
-        using var response = await Http.GetAsync(LatestReleaseUrl, timeout.Token);
+        var releaseUrl = channel == UpdateChannel.Nightly ? LatestNightlyReleaseUrl : LatestStableReleaseUrl;
+        using var response = await Http.GetAsync(releaseUrl, timeout.Token);
         response.EnsureSuccessStatusCode();
         var update = ParseRelease(
             await response.Content.ReadAsStringAsync(timeout.Token),
             null,
             platform.Rid,
-            platform.Extension);
+            platform.Extension,
+            channel);
         var currentVersion = Assembly.GetExecutingAssembly()
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
         if (update is null || currentSha is null ||
@@ -44,7 +49,8 @@ public static class Updater
             return null;
         }
 
-        if (currentVersion is not null &&
+        if (channel == UpdateChannel.Stable &&
+            currentVersion is not null &&
             TryParseVersion(currentVersion, out var installed) &&
             TryParseVersion(update.TagName, out var available) &&
             available.CompareTo(installed) <= 0)
@@ -236,7 +242,8 @@ public static class Updater
         string json,
         string? currentSha,
         string rid,
-        string extension)
+        string extension,
+        UpdateChannel channel)
     {
         using var document = JsonDocument.Parse(json);
         var releaseSha = ExtractReleaseSha(document.RootElement);
@@ -279,7 +286,8 @@ public static class Updater
                     asset.GetProperty("browser_download_url").GetString()!,
                     asset.GetProperty("size").GetInt64(),
                     digest["sha256:".Length..],
-                    document.RootElement.GetProperty("tag_name").GetString() ?? "")));
+                    document.RootElement.GetProperty("tag_name").GetString() ?? "",
+                    channel)));
         }
 
         var latest = candidates.OrderByDescending(candidate => candidate.Created).FirstOrDefault().Update;
