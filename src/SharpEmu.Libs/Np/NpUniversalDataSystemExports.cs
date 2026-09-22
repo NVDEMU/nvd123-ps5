@@ -68,6 +68,18 @@ public static class NpUniversalDataSystemExports
             return MemoryFault(ctx);
         }
 
+        // Joe & Mac uses the offline Unity NP bootstrap marker (userId
+        // 0x10000000) and can create its UDS context before the normal
+        // online initialization entry point is reached. Do not weaken the
+        // general UDS state contract; opt into compatibility only for this
+        // unmistakable offline bootstrap shape.
+        if (unchecked((int)ctx[CpuRegister.Rsi]) == 0x10000000 &&
+            ctx[CpuRegister.Rdx] == 0 &&
+            ctx[CpuRegister.Rcx] == 0)
+        {
+            _ = NpUniversalDataSystemState.TryInitializeOfflineForCompatibility();
+        }
+
         if (!NpUniversalDataSystemState.TryCreateContext(
                 unchecked((int)ctx[CpuRegister.Rsi]),
                 unchecked((uint)ctx[CpuRegister.Rdx]),
