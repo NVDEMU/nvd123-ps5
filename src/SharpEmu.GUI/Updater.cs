@@ -256,7 +256,16 @@ public static class Updater
         UpdateChannel channel)
     {
         using var document = JsonDocument.Parse(json);
+        // The nightly release tag is mutable. Prefer the commit recorded in the
+        // release body, but fall back to target_commitish when older releases do
+        // not have the generated notes yet.
         var releaseSha = ExtractReleaseSha(document.RootElement);
+        if (releaseSha is null &&
+            document.RootElement.TryGetProperty("target_commitish", out var targetProperty) &&
+            targetProperty.ValueKind == JsonValueKind.String)
+        {
+            releaseSha = NormalizeSha(targetProperty.GetString());
+        }
         var candidates = new List<(DateTimeOffset Created, UpdateInfo Update)>();
         foreach (var asset in document.RootElement.GetProperty("assets").EnumerateArray())
         {
@@ -301,7 +310,16 @@ public static class Updater
         }
 
         var latest = candidates.OrderByDescending(candidate => candidate.Created).FirstOrDefault().Update;
-        return latest is null || string.Equals(latest.Sha, currentSha, StringComparison.OrdinalIgnoreCase)
+        if (latest is null)
+        {
+            return null;
+        }
+
+        // BuildInfo intentionally stores a 7-character SHA, while some callers
+        // may provide the full Git commit. Compare normalized short SHAs so the
+        // updater does not miss an update merely because the SHA lengths differ.
+        return currentSha is not null &&
+               string.Equals(NormalizeSha(latest.Sha), NormalizeSha(currentSha), StringComparison.OrdinalIgnoreCase)
             ? null
             : latest;
     }
@@ -345,8 +363,18 @@ public static class Updater
             return null;
         }
 
-        var sha = match.Groups[1].Value;
-        return sha.Length > 7 ? sha[..7] : sha;
+        return NormalizeSha(match.Groups[1].Value);
+    }
+
+    private static string? NormalizeSha(string? sha)
+    {
+        if (string.IsNullOrWhiteSpace(sha))
+        {
+            return null;
+        }
+
+        var value = sha.Trim();
+        return value.Length > 7 ? value[..7] : value;
     }
 
     private static bool TryParseVersion(string value, out ReleaseVersion version)
