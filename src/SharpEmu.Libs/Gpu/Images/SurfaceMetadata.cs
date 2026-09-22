@@ -17,7 +17,7 @@ public enum SurfaceMetadataKind : byte
 public sealed class SurfaceMetadata
 {
     public SurfaceMetadataKind Kind;
-    public uint ClearMask;
+    // DCC/HTile slice masks can cover 64 image layers. Keep the full guest range visible.\n    public ulong ClearMask;
     public uint FillValue = 0xffffffff;
     public ulong FillSize;
 }
