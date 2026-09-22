@@ -1306,7 +1306,9 @@ public sealed class SelfLoader : ISelfLoader
         if (runtimeSymbols.Count != 0 &&
             KernelModuleRegistry.TryGetModuleByAddress(imageBase, out var registeredModule))
         {
-            KernelModuleRegistry.RegisterModuleSymbols(registeredModule.Handle, runtimeSymbols);
+            KernelModuleRegistry.RegisterModuleSymbols(
+                registeredModule.Handle,
+                new Dictionary<string, ulong>(runtimeSymbols));
             Console.Error.WriteLine(
                 $"[LOADER] Registered {runtimeSymbols.Count} runtime symbols with " +
                 $"module handle=0x{registeredModule.Handle:X} ({registeredModule.Name})");
