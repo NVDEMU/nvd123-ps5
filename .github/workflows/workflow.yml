@@ -421,7 +421,7 @@ jobs:
 
               if [ "${total}" -gt "${MAX_COMMITS}" ]; then
                 printf '\n_…and %s more commits._\n' "$((total - MAX_COMMITS))"
-              endif
+              fi
             fi
 
             printf '\n'
