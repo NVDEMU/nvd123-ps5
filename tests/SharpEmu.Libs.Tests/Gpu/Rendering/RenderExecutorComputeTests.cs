@@ -58,7 +58,7 @@ public sealed class RenderExecutorComputeTests : IDisposable
         var expected = new[]
         {
             "pending", "debug DispatchDirect 5 4 2 1 41 200020000", "end_rendering", "preparation_begin", "prepare_bindings Compute -> 1",
-            "bind_resources 1", "commit Compute C1 [1]", "bind_pipeline Compute C1", "dispatch 4 2 1", "access_barrier", "preparation_end", "reset_bindings",
+            "bind_resources 1", "commit Compute C1 [1]", "bind_pipeline Compute C1", "dispatch 4 2 1", "access_barrier writes=True", "preparation_end", "reset_bindings",
         };
         Assert.Equal(expected, _host.Calls);
         Assert.Equal(["get_compute_program threadDimensions=False", "create_compute_pipeline"], _pipelines.Calls);
