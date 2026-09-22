@@ -5523,13 +5523,17 @@ private const int DefaultImportLoopGuardSeconds = 0;
 
 	private static ThreadPriority MapGuestThreadPriority(int priority)
 	{
+		// Keep guest priority ordering without allowing a guest thread to
+		// monopolize or starve the host process. Extreme host priorities can
+		// starve the GUI, audio, GPU submission, and the scheduler itself,
+		// turning a guest scheduling decision into an emulator-wide stall.
 		if (priority <= 478)
 		{
-			return ThreadPriority.Highest;
+			return ThreadPriority.AboveNormal;
 		}
 		if (priority >= 733)
 		{
-			return ThreadPriority.Lowest;
+			return ThreadPriority.BelowNormal;
 		}
 
 		return ThreadPriority.Normal;
