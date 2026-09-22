@@ -13,12 +13,12 @@ public sealed class StrictComputeSettingsTests
     [InlineData("{}")]
     [InlineData("{\"EnvironmentToggles\":[]}")]
     [InlineData("{\"EnvironmentToggles\":[\"SHARPEMU_PROFILE_PERFORMANCE\"]}")]
-    public void NewAndExistingSettingsUseStrictModeByDefault(string json)
+    public void NewAndExistingSettingsLeaveStrictModeOffByDefault(string json)
     {
         var settings = GuiSettings.NormalizeFromJson(json);
         var effective = EffectiveLaunchSettings.Resolve(settings, new PerGameSettings());
-        Assert.True(StrictComputeSettings.IsEnabled(effective.EnvironmentToggles));
-        Assert.Equal("1", StrictComputeSettings.GetLaunchValue(effective.EnvironmentToggles));
+        Assert.False(StrictComputeSettings.IsEnabled(effective.EnvironmentToggles));
+        Assert.Equal("0", StrictComputeSettings.GetLaunchValue(effective.EnvironmentToggles));
     }
 
     [Theory]
