@@ -18,13 +18,13 @@ public sealed partial class GuestImageCache
     {
         fillValue = 0;
         using var held = _lock.Hold();
-        if (!_surfaceMetadata.TryGetValue(address, out var found) || found.Kind == SurfaceMetadataKind.PendingDcc || slice >= 32)
+        if (!_surfaceMetadata.TryGetValue(address, out var found) || found.Kind == SurfaceMetadataKind.PendingDcc || slice >= 64)
         {
             return false;
         }
 
         fillValue = found.FillValue;
-        return (found.ClearMask & (1u << (int)slice)) != 0;
+        return (found.ClearMask & (1UL << (int)slice)) != 0;
     }
 
     public bool IsMetadataCleared(ulong address, uint slice) => IsMetadataCleared(address, slice, out _);
@@ -38,7 +38,7 @@ public sealed partial class GuestImageCache
             return false;
         }
 
-        found.ClearMask = uint.MaxValue;
+        found.ClearMask = ulong.MaxValue;
         return true;
     }
 
@@ -52,9 +52,9 @@ public sealed partial class GuestImageCache
 
         // A DCC fill repeats one byte code; only the known deferred-clear codes count as clear.
         var code = (byte)fillValue;
-        var dccClearMask = fillValue != code * 0x01010101u ? 0u : code switch
+        var dccClearMask = fillValue != code * 0x01010101u ? 0UL : code switch
         {
-            0x00 or 0x20 or 0x40 or 0x80 or 0xc0 => uint.MaxValue,
+            0x00 or 0x20 or 0x40 or 0x80 or 0xc0 => ulong.MaxValue,
             _ => 0u,
         };
         using var held = _lock.Hold();
@@ -94,11 +94,11 @@ public sealed partial class GuestImageCache
 
         if (isClear)
         {
-            found.ClearMask |= 1u << (int)slice;
+            found.ClearMask |= 1UL << (int)slice;
         }
         else
         {
-            found.ClearMask &= ~(1u << (int)slice);
+            found.ClearMask &= ~(1UL << (int)slice);
         }
 
         return true;
