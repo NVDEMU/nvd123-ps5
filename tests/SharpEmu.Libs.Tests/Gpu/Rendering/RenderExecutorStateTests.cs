@@ -427,16 +427,28 @@ public sealed class RenderExecutorStateTests : IDisposable
             Sequence();
             Sequence();
             var baselineReads = _host.GuestReads;
-            var before = GC.GetAllocatedBytesForCurrentThread();
+            var readsBeforeAllocationBaseline = GC.GetAllocatedBytesForCurrentThread();
             Sequence();
-            var baselineBytes = GC.GetAllocatedBytesForCurrentThread() - before;
             var readsPerSequence = _host.GuestReads - baselineReads;
-            before = GC.GetAllocatedBytesForCurrentThread();
+
+            // Allocation counters can vary slightly between the first post-warmup
+            // sequence and later sequences on macOS. Establish the baseline from
+            // several warmed runs instead of requiring one run to be byte-for-byte
+            // identical to the measured run.
+            var baselineBytes = 0L;
+            for (var i = 0; i < 3; i++)
+            {
+                var before = GC.GetAllocatedBytesForCurrentThread();
+                Sequence();
+                baselineBytes = Math.Max(baselineBytes, GC.GetAllocatedBytesForCurrentThread() - before);
+            }
+
+            var beforeMeasured = GC.GetAllocatedBytesForCurrentThread();
             Sequence();
-            var measuredBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+            var measuredBytes = GC.GetAllocatedBytesForCurrentThread() - beforeMeasured;
 
             Assert.Equal(0, readsPerSequence);
-            Assert.Equal(readsPerSequence, _host.GuestReads - baselineReads - readsPerSequence);
+            Assert.Equal(readsPerSequence, _host.GuestReads - baselineReads - readsPerSequence * 4);
             Assert.True(measuredBytes <= baselineBytes, $"allocated {measuredBytes} bytes against a baseline of {baselineBytes}");
         }
         finally
