@@ -9,7 +9,10 @@ internal static class StrictComputeSettings
 
     internal static bool IsEnabled(IEnumerable<string> entries)
     {
-        var enabled = true;
+        // Strict compute validation is valuable for debugging, but making it the default can
+        // turn a recoverable unsupported shader into a boot-time stop. Compatibility/playability
+        // takes precedence; users can still explicitly enable strict mode in Options.
+        var enabled = false;
         foreach (var entry in entries)
         {
             var parts = entry.Split('=', 2, StringSplitOptions.TrimEntries);
