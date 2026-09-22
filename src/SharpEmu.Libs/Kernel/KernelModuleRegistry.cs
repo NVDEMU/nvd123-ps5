@@ -354,11 +354,21 @@ public static class KernelModuleRegistry
 
         lock (_gate)
         {
-            if (_symbolsByHandle.TryGetValue(handle, out var symbols) &&
-                symbols.TryGetValue(symbolName, out address) &&
-                address >= 0x10000)
+            if (_symbolsByHandle.TryGetValue(handle, out var symbols))
             {
-                return true;
+                if (symbols.TryGetValue(symbolName, out address) &&
+                    address >= 0x10000)
+                {
+                    return true;
+                }
+
+                // Native ELF/Unity images can expose the same C ABI symbol with
+                // a leading underscore in their dynamic symbol table. PS5 Unity
+                // plugins are frequently queried by the undecorated name.
+                if (TryResolveSymbolAlias(symbolName, symbols, out address))
+                {
+                    return true;
+                }
             }
 
             // Some PS5 Unity titles pass a loader-owned handle that is not the
@@ -366,9 +376,38 @@ public static class KernelModuleRegistry
             // loaded. The symbol itself is still unambiguous in the loaded image.
             // Fall back to the global loaded-symbol index rather than reporting a
             // false dlsym miss.
-            return _globalSymbols.TryGetValue(symbolName, out address) &&
-                   address >= 0x10000;
+            if (_globalSymbols.TryGetValue(symbolName, out address) &&
+                address >= 0x10000)
+            {
+                return true;
+            }
+
+            return TryResolveSymbolAlias(symbolName, _globalSymbols, out address);
         }
+    }
+
+    private static bool TryResolveSymbolAlias(
+        string symbolName,
+        IReadOnlyDictionary<string, ulong> symbols,
+        out ulong address)
+    {
+        address = 0;
+
+        if (symbols.TryGetValue("_" + symbolName, out address) &&
+            address >= 0x10000)
+        {
+            return true;
+        }
+
+        if (symbolName.Length > 1 &&
+            symbolName[0] == '_' &&
+            symbols.TryGetValue(symbolName[1..], out address) &&
+            address >= 0x10000)
+        {
+            return true;
+        }
+
+        return false;
     }
 
     public static bool TryFindByPathOrName(string? modulePathOrName, out ModuleEntry module)
