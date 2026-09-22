@@ -277,7 +277,7 @@ public partial class MainWindow : Window
             _settings.CheckForUpdatesOnStartup = AutoUpdateToggle.IsChecked == true;
         UpdateChannelBox.SelectionChanged += (_, _) =>
         {
-            _settings.UpdateChannel = SelectedComboText(UpdateChannelBox, "Stable");
+            _settings.UpdateChannel = UpdateChannelBox.SelectedIndex == 1 ? "Nightly" : "Stable";
             _availableUpdate = null;
             SetUpdateStatus("Updater.Status.Ready", BuildInfo.CommitSha ?? "dev");
         };
