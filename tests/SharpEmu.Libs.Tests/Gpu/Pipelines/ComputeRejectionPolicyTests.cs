@@ -41,8 +41,10 @@ public sealed class ComputeRejectionPolicyTests
             var cache = new ShaderPipelineCache(guest.Context, guest.Host, guest.Compiler, guest.Registry);
             var registers = Registers();
             ComputeProgram Lookup() => cache.GetComputeProgram(registers, new ShaderInterfaceRegisters(), 0x8001, 1, 1, 1);
-            if (value != "0")
+            if (value is "1" or "true" or "TRUE" or "True")
+            {
                 Assert.Throws<SchedulerFatalException>(() => Lookup());
+            }
             else
             {
                 var result = Lookup();
