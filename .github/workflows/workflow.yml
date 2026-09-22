@@ -359,11 +359,14 @@ jobs:
           fi
 
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-            echo "Release ${RELEASE_TAG} already exists and will not be modified." >&2
-            exit 1
+            echo "Release ${RELEASE_TAG} already exists; updating it with the new assets."
+            gh release edit "${RELEASE_TAG}" \
+              --title "${RELEASE_NAME}" \
+              --notes-file release-notes.md
+            gh release upload "${RELEASE_TAG}" "${assets[@]}" --clobber
+          else
+            gh release create "${RELEASE_TAG}" "${assets[@]}" \
+              --verify-tag \
+              --title "${RELEASE_NAME}" \
+              --notes-file release-notes.md
           fi
-
-          gh release create "${RELEASE_TAG}" "${assets[@]}" \
-            --verify-tag \
-            --title "${RELEASE_NAME}" \
-            --notes-file release-notes.md
