@@ -58,6 +58,16 @@ public static class Updater
             return null;
         }
 
+        // Nightly is a moving channel, not a semver release. The nightly tag is
+        // deliberately replaced after every successful main build, so a different
+        // commit SHA means a newer nightly payload is available. Do not apply the
+        // stable-release ancestry/date gate here: it incorrectly reported "up to
+        // date" when the installed build was not an ancestor of the moving nightly.
+        if (channel == UpdateChannel.Nightly)
+        {
+            return update;
+        }
+
         var comparison = await CompareCommitsAsync(currentSha, update.Sha, timeout.Token);
         return comparison.Status == "ahead" && comparison.ReleaseDate > comparison.CurrentDate
             ? update
@@ -382,6 +392,21 @@ public static class Updater
         }
 
         var executable = Path.Combine(payload, executableName);
+
+        // macOS release archives contain the complete NVDS5.app bundle. The
+        // updater helper itself therefore lives under:
+        //   payload/NVDS5.app/Contents/MacOS/SharpEmu
+        // rather than directly under payload/.
+        if (OperatingSystem.IsMacOS() && extension == ".zip")
+        {
+            var bundleExecutable = Path.Combine(
+                payload, "NVDS5.app", "Contents", "MacOS", executableName);
+            if (File.Exists(bundleExecutable))
+            {
+                executable = bundleExecutable;
+            }
+        }
+
         if (!File.Exists(executable))
         {
             throw new InvalidDataException($"The update archive does not contain {executableName}.");
