@@ -11,6 +11,7 @@ using SharpEmu.Core;
 using SharpEmu.Core.Cpu;
 using SharpEmu.Core.Memory;
 using SharpEmu.HLE;
+using SharpEmu.Libs.Kernel;
 
 namespace SharpEmu.Core.Loader;
 
@@ -500,13 +501,18 @@ public sealed class SelfLoader : ISelfLoader
             Console.Error.WriteLine($"[LOADER] Segment {index}: VAddr=0x{virtualAddress:X16}, FileSize=0x{header.FileSize:X}, MemSize=0x{header.MemorySize:X}, Align=0x{header.Alignment:X}");
             if (header.Alignment > 1)
             {
-                var vaddrMod = virtualAddress % header.Alignment;
+                // ELF p_align compares the ELF file's p_vaddr with p_offset.
+                // Do not include our runtime image base in this diagnostic:
+                // rebasing changes the modulo value even though the ELF header
+                // itself has not changed. The mapped guest address is still
+                // page-aligned and is handled independently by IVirtualMemory.
+                var vaddrMod = header.VirtualAddress % header.Alignment;
                 var offsetMod = header.Offset % header.Alignment;
                 if (vaddrMod != offsetMod)
                 {
                     Console.Error.WriteLine(
                         $"[LOADER] WARNING: Segment {index} ELF alignment mismatch! " +
-                        $"VAddr=0x{virtualAddress:X}, Offset=0x{header.Offset:X}, Align=0x{header.Alignment:X}, " +
+                        $"VAddr=0x{header.VirtualAddress:X}, Offset=0x{header.Offset:X}, Align=0x{header.Alignment:X}, " +
                         $"VAddr%Align=0x{vaddrMod:X}, Offset%Align=0x{offsetMod:X}");
                 }
             }
@@ -1291,6 +1297,19 @@ public sealed class SelfLoader : ISelfLoader
         {
             Console.Error.WriteLine(
                 $"[LOADER] Runtime symbol index populated: section={sectionSymbols}, dynamic={dynamicSymbols}, total={runtimeSymbols.Count}");
+        }
+
+        // sceKernelDlsym resolves symbols through the kernel module registry for
+        // handles returned by the module loader. Register symbols for the module
+        // that owns this image base so dynamically-loaded plugins (including
+        // Unity native rendering plugins) can be resolved by name.
+        if (runtimeSymbols.Count != 0 &&
+            KernelModuleRegistry.TryGetModuleByAddress(imageBase, out var registeredModule))
+        {
+            KernelModuleRegistry.RegisterModuleSymbols(registeredModule.Handle, runtimeSymbols);
+            Console.Error.WriteLine(
+                $"[LOADER] Registered {runtimeSymbols.Count} runtime symbols with " +
+                $"module handle=0x{registeredModule.Handle:X} ({registeredModule.Name})");
         }
     }
 
