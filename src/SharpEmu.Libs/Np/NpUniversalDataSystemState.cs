@@ -83,10 +83,16 @@ internal static class NpUniversalDataSystemState
     {
         lock (Gate)
         {
+            // Some Unity/IL2CPP titles probe the UDS service before issuing
+            // the explicit initialize call. PS5 treats this service as an
+            // always-available NP facility for these offline telemetry paths.
+            // Keep the HLE usable instead of poisoning the returned context with
+            // an invalid-argument error; an explicit initialize still resets the
+            // state and supplies the real pool size when the title provides one.
             if (!_initialized)
             {
-                context = 0;
-                return false;
+                _initialized = true;
+                _poolSize = 0;
             }
 
             context = NextPositiveId(ref _nextContext);
@@ -108,10 +114,12 @@ internal static class NpUniversalDataSystemState
     {
         lock (Gate)
         {
+            // Match the lazy context path above: Unity may create the service
+            // handle before its optional initialization handshake.
             if (!_initialized)
             {
-                handle = 0;
-                return false;
+                _initialized = true;
+                _poolSize = 0;
             }
 
             handle = NextPositiveId(ref _nextServiceHandle);
