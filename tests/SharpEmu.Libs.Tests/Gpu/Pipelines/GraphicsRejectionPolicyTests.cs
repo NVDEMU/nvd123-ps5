@@ -28,6 +28,14 @@ public sealed class GraphicsRejectionPolicyTests
     [InlineData("invalid", true)]
     public void GraphicsCompilationUsesTheSameStrictSwitch(string? setting, bool pixelActive)
     {
+        lock (SchedulingStateCollection.GlobalStateLock)
+        {
+            RunGraphicsCompilationUsesTheSameStrictSwitch(setting, pixelActive);
+        }
+    }
+
+    private static void RunGraphicsCompilationUsesTheSameStrictSwitch(string? setting, bool pixelActive)
+    {
         var previous = Environment.GetEnvironmentVariable("SHARPEMU_STRICT_COMPUTE");
         try
         {
