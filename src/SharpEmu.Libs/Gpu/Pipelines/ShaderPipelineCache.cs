@@ -27,7 +27,7 @@ internal sealed partial class ShaderPipelineCache : IShaderPipelineProvider
     private readonly Dictionary<GraphicsPipelineKey, PipelineHandle> _graphicsPipelines = new();
     private readonly Dictionary<ComputePipelineKey, PipelineHandle> _computePipelines = new();
     private readonly object _gate = new();
-    private readonly bool _strictShaders = Environment.GetEnvironmentVariable("SHARPEMU_STRICT_COMPUTE") != "0";
+    // Unsupported shader plans should be skippable by default so one unimplemented GPU\n    // feature does not turn a potentially bootable game into a fatal stop. Strict mode\n    // remains opt-in for developers diagnosing compatibility gaps.\n    private readonly bool _strictShaders = IsStrictComputeEnabled();
     private readonly HashSet<(ShaderStage Stage, ulong Hash, uint CodeSize)> _reportedShaderSkips = [];
 
     public ShaderPipelineCache(CpuContext context, IShaderPipelineHost host, IGuestGpuBackend compiler, ShaderHeaderRegistry registry)
@@ -38,7 +38,7 @@ internal sealed partial class ShaderPipelineCache : IShaderPipelineProvider
         _programs = new ShaderProgramCache(context, compiler, host);
     }
 
-    public ShaderProgramCache Programs => _programs;
+    private static bool IsStrictComputeEnabled()\n    {\n        var value = Environment.GetEnvironmentVariable("SHARPEMU_STRICT_COMPUTE");\n        return value is "1" or "true" or "TRUE" or "True";\n    }\n\n    public ShaderProgramCache Programs => _programs;
 
     public int GraphicsPipelineCount => _graphicsPipelines.Count;
 
