@@ -45,7 +45,11 @@ public sealed partial class DirectExecutionBackend
 			return Math.Clamp(parsed, 1, 64);
 		}
 
-		return 2;
+		// Two workers are safe but can unnecessarily serialize CPU-heavy guest threads
+		// on modern multi-core systems. Keep a conservative cap while allowing more
+		// guest work to run in parallel. The environment variable remains an override
+		// for machines that need a smaller or larger limit.
+		return Math.Clamp(Math.Max(Environment.ProcessorCount / 2, 2), 2, 8);
 	}
 
 	private readonly object _nativeWorkerGate = new();
