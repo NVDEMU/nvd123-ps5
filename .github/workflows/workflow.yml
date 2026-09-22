@@ -59,13 +59,11 @@ jobs:
             exit 1
           fi
 
-          {
-            echo "short-sha=${short_sha}"
-            echo "safe-ref=${safe_ref}"
-            echo "release-tag=${release_tag}"
-            echo "release-name=${release_name}"
-            echo "version=${version}"
-          } >> "$GITHUB_OUTPUT"
+          printf 'short-sha=%s\n' "${short_sha}" >> "$GITHUB_OUTPUT"
+          printf 'safe-ref=%s\n' "${safe_ref}" >> "$GITHUB_OUTPUT"
+          printf 'release-tag=%s\n' "${release_tag}" >> "$GITHUB_OUTPUT"
+          printf 'release-name=%s\n' "${release_name}" >> "$GITHUB_OUTPUT"
+          printf 'version=%s\n' "${version}" >> "$GITHUB_OUTPUT"
 
   reuse:
     name: REUSE Compliance
