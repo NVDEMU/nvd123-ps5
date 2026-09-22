@@ -79,6 +79,26 @@ internal static class NpUniversalDataSystemState
         }
     }
 
+    internal static bool TryInitializeOfflineForCompatibility()
+    {
+        lock (Gate)
+        {
+            if (_initialized)
+            {
+                return true;
+            }
+
+            // Joe & Mac's offline Unity/NP bootstrap can reach UDS context
+            // creation before issuing the normal online initialization call.
+            // Keep the public HLE contract strict, but provide an explicit
+            // offline compatibility path for that bootstrap sequence.
+            ResetLocked();
+            _initialized = true;
+            _poolSize = 1024 * 1024;
+            return true;
+        }
+    }
+
     internal static bool TryCreateContext(int userId, uint serviceLabel, ulong options, out int context)
     {
         lock (Gate)
