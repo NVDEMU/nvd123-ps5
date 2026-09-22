@@ -4,16 +4,13 @@
 name: Build and Release
 
 on:
+  # Tag pushes must not have path filters. GitHub does not evaluate changed
+  # paths for tag pushes, so keep the release trigger unambiguous.
   push:
-    branches:
-      - "**"
     tags:
       - "v*"
-    paths-ignore:
-      - "**/*.md"
-      - "**/*.png"
-      - "**/*.jpeg"
-      - "**/*.jpg"
+    branches:
+      - "**"
   pull_request:
     branches:
       - main
@@ -22,6 +19,8 @@ on:
       - "**/*.png"
       - "**/*.jpeg"
       - "**/*.jpg"
+  # Also allows running the exact tagged workflow manually when a tag was
+  # created before the workflow was fixed.
   workflow_dispatch:
 
 permissions:
@@ -108,9 +107,6 @@ jobs:
       - name: Build solution
         run: dotnet build SharpEmu.slnx -c Release --no-restore
 
-      # Runs every test project in the solution; a test failure fails the build, as
-      # does an aerolib.bin generation failure in the build step above (the MSBuild
-      # task logs an error and returns false).
       - name: Run tests
         run: dotnet test SharpEmu.slnx -c Release --no-build --verbosity normal
 
@@ -147,7 +143,6 @@ jobs:
       NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
       PUBLISH_DIR: ${{ github.workspace }}/artifacts/publish/${{ matrix.rid }}
       SPIRV_HEADERS_COMMIT: ad9184e76a66b1001c29db9b0a3e87f646c64de0
-      # SpirvModuleBuilder emits SPIR-V 1.5 and VulkanVideoPresenter requests Vulkan 1.2.
       SPIRV_TARGET_ENV: vulkan1.2
       SPIRV_TOOLS_COMMIT: 0539c81f69a3daeb706fd3477dca61435b475156
       SPIRV_TOOLS_VERSION: v2026.2
@@ -170,8 +165,6 @@ jobs:
       - name: Build solution
         run: dotnet build SharpEmu.slnx -c Release --no-restore
 
-      # Also runs on Linux/macOS: the aerolib.bin MSBuild task does platform-sensitive
-      # path handling, so a cross-platform generation regression surfaces here.
       - name: Run tests
         run: dotnet test SharpEmu.slnx -c Release --no-build --verbosity normal
 
@@ -227,6 +220,15 @@ jobs:
             -format UDZO \
             "$GITHUB_WORKSPACE/artifacts/release-assets/sharpemu-${VERSION}-osx-x64.dmg"
 
+      - name: Verify macOS release assets
+        if: matrix.rid == 'osx-x64'
+        shell: bash
+        env:
+          VERSION: ${{ needs.init.outputs.version }}
+        run: |
+          test -s "$GITHUB_WORKSPACE/artifacts/release-assets/sharpemu-${VERSION}-osx-x64.zip"
+          test -s "$GITHUB_WORKSPACE/artifacts/release-assets/sharpemu-${VERSION}-osx-x64.dmg"
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
@@ -243,9 +245,9 @@ jobs:
       - init
       - build
       - build-posix
-    # Versioned releases are immutable and tag-driven. Branch and manual runs
-    # still produce Actions artifacts without modifying a published release.
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    # Releases happen automatically for v* tag pushes. A manual run can also
+    # be started against an existing v* tag to recover a missed tag event.
+    if: startsWith(github.ref, 'refs/tags/v') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-26.04
     permissions:
       contents: write
@@ -282,8 +284,8 @@ jobs:
           tar -czf "release-assets/sharpemu-${VERSION}-linux-x64.tar.gz" -C "${linux_dir}" .
 
           macos_release_dir="release/sharpemu-osx-x64-${SHORT_SHA}/release-assets"
-          test -f "${macos_release_dir}/sharpemu-${VERSION}-osx-x64.zip"
-          test -f "${macos_release_dir}/sharpemu-${VERSION}-osx-x64.dmg"
+          test -s "${macos_release_dir}/sharpemu-${VERSION}-osx-x64.zip"
+          test -s "${macos_release_dir}/sharpemu-${VERSION}-osx-x64.dmg"
           cp "${macos_release_dir}/sharpemu-${VERSION}-osx-x64.zip" release-assets/
           cp "${macos_release_dir}/sharpemu-${VERSION}-osx-x64.dmg" release-assets/
 
