@@ -4,13 +4,12 @@
 name: Build and Release
 
 on:
-  # Tag pushes must not have path filters. GitHub does not evaluate changed
-  # paths for tag pushes, so keep the release trigger unambiguous.
   push:
     tags:
       - "v*"
     branches:
       - "**"
+
   pull_request:
     branches:
       - main
@@ -19,8 +18,7 @@ on:
       - "**/*.png"
       - "**/*.jpeg"
       - "**/*.jpg"
-  # Also allows running the exact tagged workflow manually when a tag was
-  # created before the workflow was fixed.
+
   workflow_dispatch:
 
 permissions:
@@ -34,12 +32,14 @@ jobs:
   init:
     name: Init
     runs-on: ubuntu-26.04
+
     outputs:
       release-name: ${{ steps.vars.outputs.release-name }}
       release-tag: ${{ steps.vars.outputs.release-tag }}
       safe-ref: ${{ steps.vars.outputs.safe-ref }}
       short-sha: ${{ steps.vars.outputs.short-sha }}
       version: ${{ steps.vars.outputs.version }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -50,7 +50,21 @@ jobs:
         run: |
           short_sha="${GITHUB_SHA::7}"
           safe_ref="$(echo "${GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]' | sed 's#[^a-z0-9._-]#-#g')"
-          version="$(python3 -c 'import sys, xml.etree.ElementTree as ET; version = ET.parse("Directory.Build.props").getroot().findtext(".//SharpEmuVersion"); sys.exit("Directory.Build.props is missing SharpEmuVersion") if not version else print(version)')"
+
+          version="$(
+            python3 -c '
+          import sys
+          import xml.etree.ElementTree as ET
+
+          version = ET.parse("Directory.Build.props").getroot().findtext(".//SharpEmuVersion")
+
+          if not version:
+              sys.exit("Directory.Build.props is missing SharpEmuVersion")
+
+          print(version)
+          '
+          )"
+
           release_tag="v${version}"
           release_name="NVDS5 v${version}"
 
@@ -71,6 +85,7 @@ jobs:
     name: REUSE Compliance
     needs: init
     runs-on: ubuntu-26.04
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -84,10 +99,12 @@ jobs:
       - init
       - reuse
     runs-on: windows-latest
+
     env:
       DOTNET_NOLOGO: true
       NUGET_PACKAGES: ${{ github.workspace }}\.nuget\packages
       PUBLISH_DIR: ${{ github.workspace }}\artifacts\publish\win-x64
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -116,6 +133,15 @@ jobs:
       - name: Publish win-x64 CLI
         run: dotnet publish src/SharpEmu.CLI/SharpEmu.CLI.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishDir="${env:PUBLISH_DIR}"
 
+      - name: Verify Windows publish output
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:PUBLISH_DIR}\SharpEmu.exe")) {
+            Write-Error "SharpEmu.exe was not found in ${env:PUBLISH_DIR}"
+            Get-ChildItem -Path "${env:PUBLISH_DIR}" -Recurse
+            exit 1
+          }
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
@@ -130,6 +156,7 @@ jobs:
       - init
       - reuse
     runs-on: ${{ matrix.os }}
+
     strategy:
       fail-fast: false
       matrix:
@@ -138,6 +165,7 @@ jobs:
             rid: linux-x64
           - os: macos-latest
             rid: osx-x64
+
     env:
       DOTNET_NOLOGO: true
       NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
@@ -146,6 +174,7 @@ jobs:
       SPIRV_TARGET_ENV: vulkan1.2
       SPIRV_TOOLS_COMMIT: 0539c81f69a3daeb706fd3477dca61435b475156
       SPIRV_TOOLS_VERSION: v2026.2
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -171,25 +200,40 @@ jobs:
       - name: Build pinned SPIRV-Tools
         if: matrix.rid == 'linux-x64'
         run: |
-          git clone --no-checkout --filter=blob:none https://github.com/KhronosGroup/SPIRV-Tools.git "$RUNNER_TEMP/spirv-tools"
+          git clone --no-checkout --filter=blob:none \
+            https://github.com/KhronosGroup/SPIRV-Tools.git \
+            "$RUNNER_TEMP/spirv-tools"
+
           git -C "$RUNNER_TEMP/spirv-tools" checkout --detach "$SPIRV_TOOLS_COMMIT"
+
           test "$(git -C "$RUNNER_TEMP/spirv-tools" rev-parse HEAD)" = "$SPIRV_TOOLS_COMMIT"
 
-          git clone --no-checkout --filter=blob:none https://github.com/KhronosGroup/SPIRV-Headers.git "$RUNNER_TEMP/spirv-tools/external/spirv-headers"
+          git clone --no-checkout --filter=blob:none \
+            https://github.com/KhronosGroup/SPIRV-Headers.git \
+            "$RUNNER_TEMP/spirv-tools/external/spirv-headers"
+
           git -C "$RUNNER_TEMP/spirv-tools/external/spirv-headers" checkout --detach "$SPIRV_HEADERS_COMMIT"
+
           test "$(git -C "$RUNNER_TEMP/spirv-tools/external/spirv-headers" rev-parse HEAD)" = "$SPIRV_HEADERS_COMMIT"
 
-          cmake -S "$RUNNER_TEMP/spirv-tools" -B "$RUNNER_TEMP/spirv-tools-build" \
+          cmake \
+            -S "$RUNNER_TEMP/spirv-tools" \
+            -B "$RUNNER_TEMP/spirv-tools-build" \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DSPIRV_SKIP_TESTS=ON \
             -DSPIRV_WERROR=OFF
+
           cmake --build "$RUNNER_TEMP/spirv-tools-build" --target spirv-val
 
       - name: Generate and validate synthetic SPIR-V
         if: matrix.rid == 'linux-x64'
         run: |
-          dotnet run --project tools/SharpEmu.Tools.ShaderDump/SharpEmu.Tools.ShaderDump.csproj -c Release -- artifacts/shader-dump
+          dotnet run \
+            --project tools/SharpEmu.Tools.ShaderDump/SharpEmu.Tools.ShaderDump.csproj \
+            -c Release \
+            -- artifacts/shader-dump
+
           scripts/validate-synthetic-spirv.sh \
             "$RUNNER_TEMP/spirv-tools-build/tools/spirv-val" \
             "$SPIRV_TOOLS_VERSION" \
@@ -197,7 +241,30 @@ jobs:
             artifacts/shader-dump
 
       - name: Publish ${{ matrix.rid }} CLI
-        run: dotnet publish src/SharpEmu.CLI/SharpEmu.CLI.csproj -c Release -r ${{ matrix.rid }} --self-contained true --no-restore -p:PublishDir="$PUBLISH_DIR"
+        run: |
+          dotnet publish \
+            src/SharpEmu.CLI/SharpEmu.CLI.csproj \
+            -c Release \
+            -r ${{ matrix.rid }} \
+            --self-contained true \
+            --no-restore \
+            -p:PublishDir="$PUBLISH_DIR"
+
+      - name: Verify POSIX publish output
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          executable="$PUBLISH_DIR/SharpEmu"
+
+          if [ ! -f "$executable" ]; then
+            echo "SharpEmu was not found at: $executable" >&2
+            echo "Publish directory contents:" >&2
+            find "$PUBLISH_DIR" -maxdepth 8 -print >&2
+            exit 1
+          fi
+
+          test -s "$executable"
 
       - name: Stage MoltenVK next to the build
         if: matrix.rid == 'osx-x64'
@@ -210,9 +277,19 @@ jobs:
           VERSION: ${{ needs.init.outputs.version }}
         run: |
           set -euo pipefail
+
           mkdir -p "$GITHUB_WORKSPACE/artifacts/release-assets"
+
           chmod +x "$PUBLISH_DIR/SharpEmu"
-          ditto -c -k --sequesterRsrc --keepParent "$PUBLISH_DIR" "$GITHUB_WORKSPACE/artifacts/release-assets/nvds5-${VERSION}-osx-x64.zip"
+
+          ditto \
+            -c \
+            -k \
+            --sequesterRsrc \
+            --keepParent \
+            "$PUBLISH_DIR" \
+            "$GITHUB_WORKSPACE/artifacts/release-assets/nvds5-${VERSION}-osx-x64.zip"
+
           hdiutil create \
             -volname "SharpEmu ${VERSION}" \
             -srcfolder "$PUBLISH_DIR" \
@@ -226,21 +303,20 @@ jobs:
         env:
           VERSION: ${{ needs.init.outputs.version }}
         run: |
+          set -euo pipefail
+
           test -s "$GITHUB_WORKSPACE/artifacts/release-assets/nvds5-${VERSION}-osx-x64.zip"
           test -s "$GITHUB_WORKSPACE/artifacts/release-assets/nvds5-${VERSION}-osx-x64.dmg"
 
-      # Stage the executable at the artifact root. This ensures that
-      # download-artifact recreates:
-      #
-      #   release/nvds5-linux-x64-SHORT_SHA/SharpEmu
-      #
-      # instead of nesting it under publish/linux-x64/.
+      # Put the published files directly at the artifact root. The release
+      # job can then find them regardless of download-artifact path handling.
       - name: Stage release artifact
         shell: bash
         run: |
           set -euo pipefail
 
           staging="$GITHUB_WORKSPACE/artifacts/staged/${{ matrix.rid }}"
+
           rm -rf "$staging"
           mkdir -p "$staging"
 
@@ -250,7 +326,13 @@ jobs:
             cp -a "$GITHUB_WORKSPACE/artifacts/release-assets" "$staging/"
           fi
 
-          test -f "$staging/SharpEmu"
+          executable="$(find "$staging" -type f -name SharpEmu -print -quit)"
+
+          if [ -z "$executable" ]; then
+            echo "SharpEmu was not found in staged artifact" >&2
+            find "$staging" -maxdepth 8 -print >&2
+            exit 1
+          fi
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
@@ -266,12 +348,14 @@ jobs:
       - init
       - build
       - build-posix
-    # Releases happen automatically for v* tag pushes. A manual run can also
-    # be started against an existing v* tag to recover a missed tag event.
+
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
     runs-on: ubuntu-26.04
+
     permissions:
       contents: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -283,6 +367,13 @@ jobs:
         with:
           path: release
 
+      - name: Show downloaded artifact layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Downloaded artifact layout:"
+          find release -maxdepth 10 -print
+
       - name: Package release assets
         shell: bash
         env:
@@ -291,30 +382,114 @@ jobs:
         run: |
           set -euo pipefail
 
-          win_dir="release/nvds5-win-x64-${SHORT_SHA}"
-          linux_dir="release/nvds5-linux-x64-${SHORT_SHA}"
-          macos_dir="release/nvds5-osx-x64-${SHORT_SHA}"
+          win_root="release/nvds5-win-x64-${SHORT_SHA}"
+          linux_root="release/nvds5-linux-x64-${SHORT_SHA}"
+          macos_root="release/nvds5-osx-x64-${SHORT_SHA}"
 
-          for package_dir in "${win_dir}" "${linux_dir}" "${macos_dir}"; do
-            test -d "${package_dir}"
+          for artifact_dir in \
+            "$win_root" \
+            "$linux_root" \
+            "$macos_root"; do
+
+            if [ ! -d "$artifact_dir" ]; then
+              echo "Artifact directory not found: $artifact_dir" >&2
+              find release -maxdepth 10 -print >&2
+              exit 1
+            fi
           done
+
+          win_executable="$(
+            find "$win_root" \
+              -type f \
+              \( -name SharpEmu.exe -o -name SharpEmu \) \
+              -print \
+              -quit
+          )"
+
+          linux_executable="$(
+            find "$linux_root" \
+              -type f \
+              -name SharpEmu \
+              -print \
+              -quit
+          )"
+
+          if [ -z "$win_executable" ]; then
+            echo "SharpEmu.exe was not found in $win_root" >&2
+            find "$win_root" -maxdepth 10 -print >&2
+            exit 1
+          fi
+
+          if [ -z "$linux_executable" ]; then
+            echo "SharpEmu was not found in $linux_root" >&2
+            find "$linux_root" -maxdepth 10 -print >&2
+            exit 1
+          fi
+
+          win_dir="$(dirname "$win_executable")"
+          linux_dir="$(dirname "$linux_executable")"
 
           mkdir -p release-assets
 
           (
-            cd "${win_dir}"
-            zip -q -r "../../release-assets/nvds5-${VERSION}-win-x64.zip" .
+            cd "$win_dir"
+            zip -q -r \
+              "$GITHUB_WORKSPACE/release-assets/nvds5-${VERSION}-win-x64.zip" \
+              .
           )
 
-          chmod +x "${linux_dir}/SharpEmu"
-          tar -czf "release-assets/nvds5-${VERSION}-linux-x64.tar.gz" -C "${linux_dir}" .
+          chmod +x "$linux_executable"
 
-          macos_release_dir="release/nvds5-osx-x64-${SHORT_SHA}/release-assets"
-          test -s "${macos_release_dir}/nvds5-${VERSION}-osx-x64.zip"
-          test -s "${macos_release_dir}/nvds5-${VERSION}-osx-x64.dmg"
+          tar -czf \
+            "release-assets/nvds5-${VERSION}-linux-x64.tar.gz" \
+            -C "$linux_dir" \
+            .
 
-          cp "${macos_release_dir}/nvds5-${VERSION}-osx-x64.zip" release-assets/
-          cp "${macos_release_dir}/nvds5-${VERSION}-osx-x64.dmg" release-assets/
+          macos_zip="$(
+            find "$macos_root" \
+              -type f \
+              -name "nvds5-${VERSION}-osx-x64.zip" \
+              -print \
+              -quit
+          )"
+
+          macos_dmg="$(
+            find "$macos_root" \
+              -type f \
+              -name "nvds5-${VERSION}-osx-x64.dmg" \
+              -print \
+              -quit
+          )"
+
+          if [ -z "$macos_zip" ] || [ -z "$macos_dmg" ]; then
+            echo "macOS release assets were not found in $macos_root" >&2
+            find "$macos_root" -maxdepth 10 -print >&2
+            exit 1
+          fi
+
+          cp "$macos_zip" release-assets/
+          cp "$macos_dmg" release-assets/
+
+      - name: Verify release assets
+        shell: bash
+        env:
+          VERSION: ${{ needs.init.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          expected_assets=(
+            "release-assets/nvds5-${VERSION}-win-x64.zip"
+            "release-assets/nvds5-${VERSION}-linux-x64.tar.gz"
+            "release-assets/nvds5-${VERSION}-osx-x64.zip"
+            "release-assets/nvds5-${VERSION}-osx-x64.dmg"
+          )
+
+          for asset in "${expected_assets[@]}"; do
+            if [ ! -s "$asset" ]; then
+              echo "Missing or empty release asset: $asset" >&2
+              exit 1
+            fi
+          done
 
       - name: Build release notes
         shell: bash
@@ -327,7 +502,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          previous_tag="$(git describe --tags --abbrev=0 --match 'v*' "${RELEASE_TAG}^" 2>/dev/null || true)"
+          previous_tag="$(
+            git describe \
+              --tags \
+              --abbrev=0 \
+              --match 'v*' \
+              "${RELEASE_TAG}^" \
+              2>/dev/null || true
+          )"
 
           if [ -n "${previous_tag}" ]; then
             range="${previous_tag}..${RELEASE_TAG}"
@@ -335,12 +517,21 @@ jobs:
             range="${RELEASE_TAG}"
           fi
 
-          git log --no-merges --reverse --pretty=tformat:"%H%x1f%h%x1f%s" "${range}" > commits.txt
+          git log \
+            --no-merges \
+            --reverse \
+            --pretty=tformat:"%H%x1f%h%x1f%s" \
+            "${range}" > commits.txt
+
           total="$(wc -l < commits.txt)"
 
           {
-            printf 'Automated NVDS5 v%s build for commit [`%s`](%s/commit/%s).\n\n' \
-              "${VERSION}" "${SHORT_SHA}" "${REPO_URL}" "${GITHUB_SHA}"
+            printf \
+              'Automated NVDS5 v%s build for commit [`%s`](%s/commit/%s).\n\n' \
+              "${VERSION}" \
+              "${SHORT_SHA}" \
+              "${REPO_URL}" \
+              "${GITHUB_SHA}"
 
             if [ -n "${previous_tag}" ]; then
               printf '## Changes since %s\n\n' "${previous_tag}"
@@ -351,21 +542,36 @@ jobs:
             if [ "${total}" -eq 0 ]; then
               printf '_No commits since %s._\n' "${previous_tag}"
             else
-              head -n "${MAX_COMMITS}" commits.txt | while IFS=$'\x1f' read -r sha short subject; do
-                printf -- '- %s ([`%s`](%s/commit/%s))\n' "${subject}" "${short}" "${REPO_URL}" "${sha}"
-              done
+              head -n "${MAX_COMMITS}" commits.txt |
+                while IFS=$'\x1f' read -r sha short subject; do
+                  printf \
+                    -- '- %s ([`%s`](%s/commit/%s))\n' \
+                    "${subject}" \
+                    "${short}" \
+                    "${REPO_URL}" \
+                    "${sha}"
+                done
 
               if [ "${total}" -gt "${MAX_COMMITS}" ]; then
-                printf '\n_…and %s more commits._\n' "$((total - MAX_COMMITS))"
+                printf \
+                  '\n_…and %s more commits._\n' \
+                  "$((total - MAX_COMMITS))"
               fi
             fi
 
             printf '\n'
 
             if [ -n "${previous_tag}" ]; then
-              printf '**Full changelog**: %s/compare/%s...%s\n' "${REPO_URL}" "${previous_tag}" "${RELEASE_TAG}"
+              printf \
+                '**Full changelog**: %s/compare/%s...%s\n' \
+                "${REPO_URL}" \
+                "${previous_tag}" \
+                "${RELEASE_TAG}"
             else
-              printf '**Full changelog**: %s/commits/%s\n' "${REPO_URL}" "${RELEASE_TAG}"
+              printf \
+                '**Full changelog**: %s/commits/%s\n' \
+                "${REPO_URL}" \
+                "${RELEASE_TAG}"
             fi
           } > release-notes.md
 
@@ -379,23 +585,37 @@ jobs:
           RELEASE_NAME: ${{ needs.init.outputs.release-name }}
           RELEASE_TAG: ${{ needs.init.outputs.release-tag }}
         run: |
-          mapfile -t assets < <(find release-assets -maxdepth 1 -type f \( -name '*.zip' -o -name '*.tar.gz' \) | sort)
+          set -euo pipefail
+
+          mapfile -t assets < <(
+            find release-assets \
+              -maxdepth 1 \
+              -type f \
+              \( -name '*.zip' -o -name '*.tar.gz' \) |
+              sort
+          )
 
           if [ "${#assets[@]}" -ne 4 ]; then
             echo "Expected 4 release assets, found ${#assets[@]}." >&2
+            printf '%s\n' "${assets[@]}" >&2
             exit 1
           fi
 
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-            echo "Release ${RELEASE_TAG} already exists; updating it with the new assets."
+            echo "Release ${RELEASE_TAG} already exists; updating its assets."
 
             gh release edit "${RELEASE_TAG}" \
               --title "${RELEASE_NAME}" \
               --notes-file release-notes.md
 
-            gh release upload "${RELEASE_TAG}" "${assets[@]}" --clobber
+            gh release upload \
+              "${RELEASE_TAG}" \
+              "${assets[@]}" \
+              --clobber
           else
-            gh release create "${RELEASE_TAG}" "${assets[@]}" \
+            gh release create \
+              "${RELEASE_TAG}" \
+              "${assets[@]}" \
               --verify-tag \
               --title "${RELEASE_NAME}" \
               --notes-file release-notes.md
