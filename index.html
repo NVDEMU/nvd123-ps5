@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NVDS5 Compatibility List</title>
+  <style>
+    :root {
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color-scheme: dark;
+      --bg: #0b0f14;
+      --panel: #121923;
+      --panel-2: #192231;
+      --text: #f5f7fa;
+      --muted: #9ba8b7;
+      --border: #2b3748;
+      --accent: #6ea8fe;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    header {
+      padding: 48px 20px 32px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2rem, 5vw, 3.2rem);
+    }
+
+    header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1rem;
+    }
+
+    main {
+      width: min(1100px, calc(100% - 32px));
+      margin: 32px auto 60px;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .toolbar label {
+      color: var(--muted);
+      font-size: .95rem;
+    }
+
+    select {
+      margin-left: 8px;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .count {
+      color: var(--muted);
+      font-size: .9rem;
+    }
+
+    .game-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .game {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 20px;
+      align-items: center;
+      padding: 20px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    .game h2 {
+      margin: 0 0 7px;
+      font-size: 1.25rem;
+    }
+
+    .game p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .status {
+      min-width: 120px;
+      text-align: center;
+      padding: 9px 13px;
+      border-radius: 999px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      font-weight: 700;
+    }
+
+    .empty {
+      padding: 32px;
+      text-align: center;
+      color: var(--muted);
+      background: var(--panel);
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+    }
+
+    footer {
+      text-align: center;
+      padding: 28px 16px;
+      color: var(--muted);
+      font-size: .85rem;
+      border-top: 1px solid var(--border);
+    }
+
+    @media (max-width: 600px) {
+      .game { grid-template-columns: 1fr; }
+      .status { width: fit-content; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>NVDS5 Compatibility List</h1>
+    <p>Game compatibility status for the NVDS5 PlayStation 5 emulator.</p>
+  </header>
+
+  <main>
+    <div class="toolbar">
+      <label>
+        Sort by status:
+        <select id="statusFilter" aria-label="Filter games by compatibility status">
+          <option value="all">All</option>
+          <option value="Doesn't Boot">Doesn't Boot</option>
+          <option value="Boots">Boots</option>
+          <option value="Menu">Menu</option>
+          <option value="Ingame">Ingame</option>
+          <option value="Playable">Playable</option>
+        </select>
+      </label>
+      <span class="count" id="count"></span>
+    </div>
+
+    <section class="game-list" id="gameList" aria-live="polite"></section>
+  </main>
+
+  <footer>
+    NVDS5 Compatibility List
+  </footer>
+
+  <script>
+    const games = [
+      {
+        name: "NEW Joe And Mac",
+        status: "Playable"
+      }
+    ];
+
+    const statusFilter = document.getElementById("statusFilter");
+    const gameList = document.getElementById("gameList");
+    const count = document.getElementById("count");
+
+    function render() {
+      const selected = statusFilter.value;
+      const visibleGames = selected === "all"
+        ? games
+        : games.filter(game => game.status === selected);
+
+      count.textContent = visibleGames.length === 1
+        ? "1 game"
+        : visibleGames.length + " games";
+
+      if (visibleGames.length === 0) {
+        gameList.innerHTML = '<div class="empty">No games match this compatibility status.</div>';
+        return;
+      }
+
+      gameList.innerHTML = visibleGames.map(game => `
+        <article class="game">
+          <div>
+            <h2>${escapeHtml(game.name)}</h2>
+            <p>Compatibility status: ${escapeHtml(game.status)}</p>
+          </div>
+          <div class="status">${escapeHtml(game.status)}</div>
+        </article>
+      `).join("");
+    }
+
+    function escapeHtml(value) {
+      return value.replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      }[char]));
+    }
+
+    statusFilter.addEventListener("change", render);
+    render();
+  </script>
+</body>
+</html>
