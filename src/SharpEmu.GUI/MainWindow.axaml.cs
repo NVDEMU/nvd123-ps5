@@ -1,4 +1,4 @@
-// Copyright (C) 2026 SharpEmu Emulator Project
+// Copyright (C) 2026 NVDS5 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 using Avalonia;
@@ -679,7 +679,7 @@ public partial class MainWindow : Window
             Timeout = TimeSpan.FromSeconds(15)
         };
 
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("SharpEmu/1.0");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("NVDS5/1.0");
         client.DefaultRequestHeaders.Accept.Add(
             new MediaTypeWithQualityHeaderValue("application/vnd.github.sha"));
 
@@ -904,7 +904,7 @@ public partial class MainWindow : Window
                 ? $" · {BuildInfo.CommitSha}"
                 : $" · UNOFFICIAL {BuildInfo.CommitSha}";
         VersionText.Text = display;
-        Title = $"SharpEmu {display}";
+        Title = $"NVDS5 {display}";
         ToolTip.SetTip(VersionText, BuildInfo.Banner);
 
         _settings = GuiSettings.Load();
@@ -1521,7 +1521,7 @@ public partial class MainWindow : Window
         SaveFilePickerResult result = await StorageProvider.SaveFilePickerWithResultAsync(new FilePickerSaveOptions
         {
             Title = loc.Get("Dialog.SaveLogFile"),
-            SuggestedFileName = "SharpEmuLog",
+            SuggestedFileName = "NVDS5Log",
             DefaultExtension = "log",
             FileTypeChoices =
                 [
