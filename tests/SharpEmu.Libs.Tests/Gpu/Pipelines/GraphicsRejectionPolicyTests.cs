@@ -43,12 +43,16 @@ public sealed class GraphicsRejectionPolicyTests
             GraphicsPrograms Lookup() => cache.GetGraphicsPrograms(
                 new VertexStageRegisters { ExportAddress = VertexAddress }, new PixelStageRegisters { Address = PixelAddress },
                 new ShaderInterfaceRegisters(), new ContextRegisters(), [], pixelActive);
-            if (setting != "0")
+            var strict = setting is "1" or "true" or "TRUE" or "True";
+            if (strict)
                 Assert.Contains("cannot be compiled", Assert.Throws<SchedulerFatalException>(() => Lookup()).Message);
-            else Assert.False(Lookup().Available);
+            else
+                Assert.False(Lookup().Available);
+
             Assert.Empty(guest.Host.Modules);
             Assert.Empty(guest.Host.GraphicsPipelines);
-            if (setting == "0")
+
+            if (!strict)
             {
                 guest.Compiler.Rejection = null;
                 Assert.True(Lookup().Available);
