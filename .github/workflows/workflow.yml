@@ -33,7 +33,7 @@ concurrency:
 jobs:
   init:
     name: Init
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-24.04
     outputs:
       release-name: ${{ steps.vars.outputs.release-name }}
       release-tag: ${{ steps.vars.outputs.release-tag }}
@@ -68,7 +68,7 @@ jobs:
   reuse:
     name: REUSE Compliance
     needs: init
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -132,7 +132,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-26.04
+          - os: ubuntu-24.04
             rid: linux-x64
           - os: macos-latest
             rid: osx-x64
@@ -310,7 +310,7 @@ PLIST
       - build
       - build-posix
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -376,7 +376,7 @@ PLIST
     # Stable releases happen for v* tag pushes. Manual runs are also allowed
     # for recovery/testing.
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_type == 'tag')
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
