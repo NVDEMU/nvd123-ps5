@@ -858,12 +858,47 @@ internal static unsafe partial class VulkanVideoPresenter
                 AccessFlags.MemoryReadBit | AccessFlags.MemoryWriteBit,
                 AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit);
 
-        public void ShaderAccessBarrier() =>
-            RecordMemoryBarrier(
-                PipelineStageFlags.ComputeShaderBit,
-                PipelineStageFlags.AllCommandsBit,
-                AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit,
-                AccessFlags.MemoryReadBit | AccessFlags.MemoryWriteBit);
+        public void ShaderAccessBarrier(bool writesMemory = true)
+        {
+            EndRendering();
+            var command = BeginBatchedGuestCommands();
+            if (!writesMemory)
+            {
+                // Read-only compute still has to complete before later dependent work, but
+                // no shader-write visibility is required. A zero-access dependency keeps
+                // execution ordering without paying for a global memory barrier.
+                var dependency = new DependencyInfo
+                {
+                    SType = StructureType.DependencyInfo,
+                    DependencyFlags = DependencyFlags.None,
+                    MemoryBarrierCount = 0,
+                    BufferMemoryBarrierCount = 0,
+                    ImageMemoryBarrierCount = 0,
+                };
+                var source = PipelineStageFlags2.ComputeShaderBit;
+                var destination = PipelineStageFlags2.AllCommandsBit;
+                dependency.PMemoryBarriers = null;
+                _vk.CmdPipelineBarrier2(command, &dependency);
+                return;
+            }
+
+            var barrier = new MemoryBarrier2
+            {
+                SType = StructureType.MemoryBarrier2,
+                SrcStageMask = PipelineStageFlags2.ComputeShaderBit,
+                DstStageMask = PipelineStageFlags2.AllCommandsBit,
+                SrcAccessMask = AccessFlags2.ShaderReadBit | AccessFlags2.ShaderWriteBit,
+                DstAccessMask = AccessFlags2.MemoryReadBit | AccessFlags2.MemoryWriteBit,
+            };
+            var fullDependency = new DependencyInfo
+            {
+                SType = StructureType.DependencyInfo,
+                DependencyFlags = DependencyFlags.None,
+                MemoryBarrierCount = 1,
+                PMemoryBarriers = &barrier,
+            };
+            _vk.CmdPipelineBarrier2(command, &fullDependency);
+        }
 
         // Clears the bound targets on the GPU in place of the draw; the store owns the result.
         public void ClearColorTargets(ReadOnlySpan<ColorTargetState> targets, SolidColorClear clear)
