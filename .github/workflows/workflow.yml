@@ -210,10 +210,47 @@ jobs:
           set -euo pipefail
           mkdir -p "$GITHUB_WORKSPACE/artifacts/release-assets"
           chmod +x "$PUBLISH_DIR/SharpEmu"
-          ditto -c -k --sequesterRsrc --keepParent "$PUBLISH_DIR" "$GITHUB_WORKSPACE/artifacts/release-assets/nvds5-${VERSION}-osx-x64.zip"
+
+          app_dir="$GITHUB_WORKSPACE/artifacts/NVDS5.app"
+          app_contents="$app_dir/Contents"
+          app_macos="$app_contents/MacOS"
+          app_resources="$app_contents/Resources"
+
+          rm -rf "$app_dir"
+          mkdir -p "$app_macos" "$app_resources"
+          cp -a "$PUBLISH_DIR/." "$app_macos/"
+
+          cat > "$app_contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDisplayName</key>
+  <string>NVDS5</string>
+  <key>CFBundleExecutable</key>
+  <string>SharpEmu</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.nvdemu.nvds5</string>
+  <key>CFBundleName</key>
+  <string>NVDS5</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>${VERSION}</string>
+  <key>CFBundleVersion</key>
+  <string>${VERSION}</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>12.0</string>
+</dict>
+</plist>
+PLIST
+
+          codesign --force --deep --sign - "$app_dir"
+
+          ditto -c -k --sequesterRsrc --keepParent "$app_dir" "$GITHUB_WORKSPACE/artifacts/release-assets/nvds5-${VERSION}-osx-x64.zip"
           hdiutil create \
-            -volname "SharpEmu ${VERSION}" \
-            -srcfolder "$PUBLISH_DIR" \
+            -volname "NVDS5 ${VERSION}" \
+            -srcfolder "$app_dir" \
             -ov \
             -format UDZO \
             "$GITHUB_WORKSPACE/artifacts/release-assets/nvds5-${VERSION}-osx-x64.dmg"
