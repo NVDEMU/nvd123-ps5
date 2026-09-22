@@ -210,11 +210,30 @@ jobs:
         if: matrix.rid == 'osx-x64'
         run: scripts/fetch-macos-moltenvk.sh "$PUBLISH_DIR"
 
+      - name: Package macOS release assets
+        if: matrix.rid == 'osx-x64'
+        shell: bash
+        env:
+          VERSION: ${{ needs.init.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/artifacts/release-assets"
+          chmod +x "$PUBLISH_DIR/SharpEmu"
+          ditto -c -k --sequesterRsrc --keepParent "$PUBLISH_DIR" "$GITHUB_WORKSPACE/artifacts/release-assets/sharpemu-${VERSION}-osx-x64.zip"
+          hdiutil create \
+            -volname "SharpEmu ${VERSION}" \
+            -srcfolder "$PUBLISH_DIR" \
+            -ov \
+            -format UDZO \
+            "$GITHUB_WORKSPACE/artifacts/release-assets/sharpemu-${VERSION}-osx-x64.dmg"
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
           name: sharpemu-${{ matrix.rid }}-${{ needs.init.outputs.short-sha }}
-          path: ${{ env.PUBLISH_DIR }}
+          path: |
+            ${{ env.PUBLISH_DIR }}
+            ${{ github.workspace }}/artifacts/release-assets
           if-no-files-found: error
           include-hidden-files: true
 
@@ -259,9 +278,14 @@ jobs:
           mkdir -p release-assets
           (cd "${win_dir}" && zip -q -r "../../release-assets/sharpemu-${VERSION}-win-x64.zip" .)
 
-          chmod +x "${linux_dir}/SharpEmu" "${macos_dir}/SharpEmu"
+          chmod +x "${linux_dir}/SharpEmu"
           tar -czf "release-assets/sharpemu-${VERSION}-linux-x64.tar.gz" -C "${linux_dir}" .
-          tar -czf "release-assets/sharpemu-${VERSION}-osx-x64.tar.gz" -C "${macos_dir}" .
+
+          macos_release_dir="release/sharpemu-osx-x64-${SHORT_SHA}/release-assets"
+          test -f "${macos_release_dir}/sharpemu-${VERSION}-osx-x64.zip"
+          test -f "${macos_release_dir}/sharpemu-${VERSION}-osx-x64.dmg"
+          cp "${macos_release_dir}/sharpemu-${VERSION}-osx-x64.zip" release-assets/
+          cp "${macos_release_dir}/sharpemu-${VERSION}-osx-x64.dmg" release-assets/
 
       - name: Build release notes
         shell: bash
@@ -327,8 +351,8 @@ jobs:
           RELEASE_TAG: ${{ needs.init.outputs.release-tag }}
         run: |
           mapfile -t assets < <(find release-assets -maxdepth 1 -type f \( -name '*.zip' -o -name '*.tar.gz' \) | sort)
-          if [ "${#assets[@]}" -ne 3 ]; then
-            echo "Expected 3 release assets, found ${#assets[@]}." >&2
+          if [ "${#assets[@]}" -ne 4 ]; then
+            echo "Expected 4 release assets, found ${#assets[@]}." >&2
             exit 1
           fi
 
