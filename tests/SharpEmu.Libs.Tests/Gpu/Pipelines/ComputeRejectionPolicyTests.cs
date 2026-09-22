@@ -54,7 +54,7 @@ public sealed class ComputeRejectionPolicyTests
             Assert.Empty(guest.Host.Modules);
             Assert.Empty(guest.Host.ComputePipelines);
             Assert.Equal(0, guest.Compiler.Compilations);
-            if (!rejectPlan && value == "0")
+            if (!rejectPlan && value is not ("1" or "true" or "TRUE" or "True"))
             {
                 guest.Compiler.Rejection = null;
                 Assert.True(Lookup().Available);
