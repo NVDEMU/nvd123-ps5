@@ -1094,7 +1094,7 @@ internal sealed partial class MetalCommandStreamHost : IRenderHost, IShaderPipel
     {
     }
 
-    void IRenderHost.ShaderAccessBarrier(bool writesMemory)
+    public void ShaderAccessBarrier(bool writesMemory = true)
     {
         _ = writesMemory;
     }
