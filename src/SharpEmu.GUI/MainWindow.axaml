@@ -1312,6 +1312,18 @@ SPDX-License-Identifier: GPL-2.0-or-later
                                       Classes="optionToggle"
                                       IsChecked="True" />
                       </local:SettingRow>
+                      
+                      <local:SettingRow x:Name="UpdateChannelRow"
+                                        Classes="optionRow"
+                                        Label="Update Channel"
+                                        Description="Choose whether NVDS5 checks stable releases or the latest Nightly build.">
+                        <ComboBox x:Name="UpdateChannelBox"
+                                  Width="140"
+                                  HorizontalAlignment="Right">
+                          <ComboBoxItem Content="Stable" />
+                          <ComboBoxItem Content="Nightly" />
+                        </ComboBox>
+                      </local:SettingRow>
                     </StackPanel>
                   </Border>
                 </StackPanel>
