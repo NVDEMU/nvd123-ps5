@@ -209,18 +209,22 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$GITHUB_WORKSPACE/artifacts/release-assets"
-          chmod +x "$PUBLISH_DIR/SharpEmu"
 
+          # Build a real macOS application bundle around the self-contained
+          # publish directory. The CLI executable is also the GUI host.
           app_dir="$GITHUB_WORKSPACE/artifacts/NVDS5.app"
           app_contents="$app_dir/Contents"
           app_macos="$app_contents/MacOS"
           app_resources="$app_contents/Resources"
+          app_executable="$app_macos/SharpEmu"
 
           rm -rf "$app_dir"
           mkdir -p "$app_macos" "$app_resources"
-          cp -a "$PUBLISH_DIR/." "$app_macos/"
+          cp -a "$PUBLISH_DIR"/. "$app_macos"/
+          chmod 755 "$app_executable"
+          test -x "$app_executable"
 
-          cat > "$app_contents/Info.plist" <<'PLIST'
+          cat > "$app_contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -245,9 +249,13 @@ jobs:
 </plist>
 PLIST
 
+          plutil -lint "$app_contents/Info.plist"
           codesign --force --deep --sign - "$app_dir"
+          codesign --verify --deep --strict --verbose=2 "$app_dir"
 
-          ditto -c -k --sequesterRsrc --keepParent "$app_dir" "$GITHUB_WORKSPACE/artifacts/release-assets/nvds5-${VERSION}-osx-x64.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$app_dir" \
+            "$GITHUB_WORKSPACE/artifacts/release-assets/nvds5-${VERSION}-osx-x64.zip"
+
           hdiutil create \
             -volname "NVDS5 ${VERSION}" \
             -srcfolder "$app_dir" \
