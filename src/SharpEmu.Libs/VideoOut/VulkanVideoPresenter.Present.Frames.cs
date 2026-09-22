@@ -148,6 +148,7 @@ internal static unsafe partial class VulkanVideoPresenter
         private Image _presentEncodeImage;
         private DeviceMemory _presentEncodeMemory;
         private Extent2D _presentEncodeExtent;
+        private bool _presentEncodeImageInitialized;
 
         private bool TryGetPresentEncodeImage(out Image encodeImage)
         {
@@ -229,6 +230,7 @@ internal static unsafe partial class VulkanVideoPresenter
             }
 
             _presentEncodeExtent = default;
+            _presentEncodeImageInitialized = false;
         }
 
         private void RecordGuestImageBlit(
@@ -297,9 +299,13 @@ internal static unsafe partial class VulkanVideoPresenter
             var encodeToTransferDst = new ImageMemoryBarrier2
             {
                 SType = StructureType.ImageMemoryBarrier2,
-                SrcAccessMask = AccessFlags2.TransferReadBit,
+                SrcAccessMask = _presentEncodeImageInitialized
+                    ? AccessFlags2.TransferReadBit
+                    : 0,
                 DstAccessMask = AccessFlags2.TransferWriteBit,
-                OldLayout = ImageLayout.Undefined,
+                OldLayout = _presentEncodeImageInitialized
+                    ? ImageLayout.TransferSrcOptimal
+                    : ImageLayout.Undefined,
                 NewLayout = ImageLayout.TransferDstOptimal,
                 SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
                 DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
@@ -522,6 +528,16 @@ internal static unsafe partial class VulkanVideoPresenter
                     ImageLayout.TransferDstOptimal,
                     1,
                     &encodedCopy);
+            }
+
+            // The encode image is persistent across frames. Its layout after
+            // the copy is TransferSrcOptimal, so the next frame must transition
+            // from that tracked layout rather than pretending the image is
+            // Undefined. Leaving this state implicit can produce stale/black
+            // presentation on stricter Vulkan drivers.
+            if (encodeForPresent)
+            {
+                _presentEncodeImageInitialized = true;
             }
 
             if (traceDestination)
