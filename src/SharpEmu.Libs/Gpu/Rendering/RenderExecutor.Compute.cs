@@ -147,7 +147,7 @@ public sealed partial class RenderExecutor
             {
                 _host.Dispatch(groupsX, groupsY, groupsZ);
             }
-            _host.ShaderAccessBarrier();
+            var writesMemory = hasStorageWrites || program.UsesDeviceAddresses ||\n                program.Buffers.Any(static resource => resource.Written || resource.Atomic) ||\n                program.Images.Any(static resource => resource.Written || resource.Atomic);\n            _host.ShaderAccessBarrier(writesMemory);
         }
 
         _host.ResetBindings();
