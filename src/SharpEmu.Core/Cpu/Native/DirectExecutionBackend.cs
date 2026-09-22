@@ -36,7 +36,11 @@ public sealed unsafe partial class DirectExecutionBackend : INativeCpuBackend, I
 
 	private const int ImportLoopWideDiversityWindow = 768;
 
-	private const int DefaultImportLoopGuardSeconds = 5;
+	// Import-loop detection can terminate a real game if it mistakes a legitimate
+// high-frequency polling loop for a hang. Compatibility must take precedence over
+// the watchdog, so the guard is opt-in through SHARPEMU_IMPORT_LOOP_GUARD_SECONDS.
+// Set that variable to a positive number when diagnosing a suspected deadlock.
+private const int DefaultImportLoopGuardSeconds = 0;
 
 	private readonly struct ImportStubEntry
 	{
