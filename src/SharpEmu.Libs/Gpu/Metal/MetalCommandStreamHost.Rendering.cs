@@ -1094,8 +1094,9 @@ internal sealed partial class MetalCommandStreamHost : IRenderHost, IShaderPipel
     {
     }
 
-    void IRenderHost.ShaderAccessBarrier()
+    void IRenderHost.ShaderAccessBarrier(bool writesMemory)
     {
+        _ = writesMemory;
     }
 
     // A fullscreen solid draw into every target; the presenter has no clear command on this seam.
