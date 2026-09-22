@@ -1303,15 +1303,33 @@ public sealed class SelfLoader : ISelfLoader
         // handles returned by the module loader. Register symbols for the module
         // that owns this image base so dynamically-loaded plugins (including
         // Unity native rendering plugins) can be resolved by name.
-        if (runtimeSymbols.Count != 0 &&
-            KernelModuleRegistry.TryGetModuleByAddress(imageBase, out var registeredModule))
+        if (runtimeSymbols.Count != 0)
         {
-            KernelModuleRegistry.RegisterModuleSymbols(
-                registeredModule.Handle,
-                new Dictionary<string, ulong>(runtimeSymbols));
-            Console.Error.WriteLine(
-                $"[LOADER] Registered {runtimeSymbols.Count} runtime symbols with " +
-                $"module handle=0x{registeredModule.Handle:X} ({registeredModule.Name})");
+            if (!KernelModuleRegistry.TryGetModuleByAddress(imageBase, out var registeredModule))
+            {
+                // LoadAdditional images can arrive before the higher-level dynlib
+                // layer has attached its public handle. Keep their exports visible
+                // to sceKernelDlsym immediately; the public handle can still refer
+                // to the same image through the registry's global symbol index.
+                var syntheticHandle = KernelModuleRegistry.RegisterSyntheticModule(
+                    $"loaded_0x{imageBase:X16}.sprx",
+                    isSystemModule: false);
+                KernelModuleRegistry.RegisterModuleSymbols(
+                    syntheticHandle,
+                    new Dictionary<string, ulong>(runtimeSymbols));
+                Console.Error.WriteLine(
+                    $"[LOADER] Registered {runtimeSymbols.Count} runtime symbols with " +
+                    $"synthetic module handle=0x{syntheticHandle:X}");
+            }
+            else
+            {
+                KernelModuleRegistry.RegisterModuleSymbols(
+                    registeredModule.Handle,
+                    new Dictionary<string, ulong>(runtimeSymbols));
+                Console.Error.WriteLine(
+                    $"[LOADER] Registered {runtimeSymbols.Count} runtime symbols with " +
+                    $"module handle=0x{registeredModule.Handle:X} ({registeredModule.Name})");
+            }
         }
     }
 
