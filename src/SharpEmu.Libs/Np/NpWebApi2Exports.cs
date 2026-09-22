@@ -75,6 +75,19 @@ public static class NpWebApi2Exports
     }
 
     [SysAbiExport(
+        Nid = "fY3QqeNkF8k",
+        ExportName = "sceNpWebApi2StubbedOfflineOperation",
+        Target = Generation.Gen4 | Generation.Gen5,
+        LibraryName = "libSceNpWebApi2")]
+    public static int NpWebApi2StubbedOfflineOperation(CpuContext ctx)
+    {
+        // Unity's PS5 WebApi2 integration probes this online-only operation
+        // during startup. SharpEmu has no PSN backend, so keep the operation
+        // inert but successful rather than leaving the import unresolved.
+        return ctx.SetReturn(0);
+    }
+
+    [SysAbiExport(
         Nid = "sk54bi6FtYM",
         ExportName = "sceNpWebApi2CreateUserContext",
         Target = Generation.Gen4 | Generation.Gen5,
