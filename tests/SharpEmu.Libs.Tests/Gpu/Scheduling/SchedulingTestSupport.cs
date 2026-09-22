@@ -12,6 +12,10 @@ namespace SharpEmu.Libs.Tests.Gpu.Scheduling;
 public sealed class SchedulingStateCollection
 {
     public const string Name = "SchedulingState";
+
+    // Environment variables and SubmissionScheduler.OnFatal are process-global. xUnit can
+    // execute theory cases concurrently, so tests that temporarily mutate them share this lock.
+    public static object GlobalStateLock { get; } = new();
 }
 
 internal sealed class SchedulerFatalException(string message) : Exception(message);
