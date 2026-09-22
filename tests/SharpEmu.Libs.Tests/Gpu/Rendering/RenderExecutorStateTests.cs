@@ -427,7 +427,6 @@ public sealed class RenderExecutorStateTests : IDisposable
             Sequence();
             Sequence();
             var baselineReads = _host.GuestReads;
-            var readsBeforeAllocationBaseline = GC.GetAllocatedBytesForCurrentThread();
             Sequence();
             var readsPerSequence = _host.GuestReads - baselineReads;
 
