@@ -3,7 +3,7 @@
 
 name: Build and Release
 
-on:
+"on":
   # Tag pushes must not have path filters. GitHub does not evaluate changed
   # paths for tag pushes, so keep the release trigger unambiguous.
   push:
@@ -167,7 +167,7 @@ jobs:
         run: dotnet test SharpEmu.slnx -c Release --no-build --verbosity normal
 
       - name: Build pinned SPIRV-Tools
-        if: matrix.rid == 'linux-x64'
+        if: ${{ matrix.rid == 'linux-x64' }}
         run: |
           git clone --no-checkout --filter=blob:none https://github.com/KhronosGroup/SPIRV-Tools.git "$RUNNER_TEMP/spirv-tools"
           git -C "$RUNNER_TEMP/spirv-tools" checkout --detach "$SPIRV_TOOLS_COMMIT"
@@ -185,7 +185,7 @@ jobs:
           cmake --build "$RUNNER_TEMP/spirv-tools-build" --target spirv-val
 
       - name: Generate and validate synthetic SPIR-V
-        if: matrix.rid == 'linux-x64'
+        if: ${{ matrix.rid == 'linux-x64' }}
         run: |
           dotnet run --project tools/SharpEmu.Tools.ShaderDump/SharpEmu.Tools.ShaderDump.csproj -c Release -- artifacts/shader-dump
           scripts/validate-synthetic-spirv.sh \
@@ -198,11 +198,11 @@ jobs:
         run: dotnet publish src/SharpEmu.CLI/SharpEmu.CLI.csproj -c Release -r ${{ matrix.rid }} --self-contained true --no-restore -p:PublishDir="$PUBLISH_DIR"
 
       - name: Stage MoltenVK next to the build
-        if: matrix.rid == 'osx-x64'
+        if: ${{ matrix.rid == 'osx-x64' }}
         run: scripts/fetch-macos-moltenvk.sh "$PUBLISH_DIR"
 
       - name: Package macOS release assets
-        if: matrix.rid == 'osx-x64'
+        if: ${{ matrix.rid == 'osx-x64' }}
         shell: bash
         env:
           VERSION: ${{ needs.init.outputs.version }}
@@ -264,7 +264,7 @@ jobs:
             "$GITHUB_WORKSPACE/artifacts/release-assets/nvds5-${VERSION}-osx-x64.dmg"
 
       - name: Verify macOS release assets
-        if: matrix.rid == 'osx-x64'
+        if: ${{ matrix.rid == 'osx-x64' }}
         shell: bash
         env:
           VERSION: ${{ needs.init.outputs.version }}
@@ -309,7 +309,7 @@ jobs:
       - init
       - build
       - build-posix
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -375,7 +375,7 @@ jobs:
       - build-posix
     # Stable releases happen for v* tag pushes. Manual runs are also allowed
     # for recovery/testing.
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_type == 'tag')
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_type == 'tag') }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
