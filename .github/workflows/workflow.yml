@@ -260,15 +260,79 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
 
+  nightly:
+    name: Publish Nightly
+    needs:
+      - init
+      - build
+      - build-posix
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: nightly
+
+      - name: Package nightly assets
+        shell: bash
+        env:
+          SHORT_SHA: ${{ needs.init.outputs.short-sha }}
+          VERSION: ${{ needs.init.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          win_dir="nightly/nvds5-win-x64-${SHORT_SHA}"
+          linux_dir="nightly/nvds5-linux-x64-${SHORT_SHA}"
+          macos_dir="nightly/nvds5-osx-x64-${SHORT_SHA}"
+
+          for package_dir in "${win_dir}" "${linux_dir}" "${macos_dir}"; do
+            test -d "${package_dir}"
+          done
+
+          mkdir -p nightly-assets
+
+          (
+            cd "${win_dir}"
+            zip -q -r "${GITHUB_WORKSPACE}/nightly-assets/nvds5-nightly-win-x64.zip" .
+          )
+
+          chmod +x "${linux_dir}/SharpEmu"
+          tar -czf "nightly-assets/nvds5-nightly-linux-x64.tar.gz" -C "${linux_dir}" .
+
+          macos_release_dir="${macos_dir}/release-assets"
+          test -s "${macos_release_dir}/nvds5-${VERSION}-osx-x64.zip"
+          test -s "${macos_release_dir}/nvds5-${VERSION}-osx-x64.dmg"
+          cp "${macos_release_dir}/nvds5-${VERSION}-osx-x64.zip" nightly-assets/nvds5-nightly-osx-x64.zip
+          cp "${macos_release_dir}/nvds5-${VERSION}-osx-x64.dmg" nightly-assets/nvds5-nightly-osx-x64.dmg
+
+      - name: Publish Nightly release
+        shell: bash
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if gh release view nightly >/dev/null 2>&1; then
+            gh release edit nightly --title "NVDS5 Nightly" --notes "Latest successful main build: ${SHA}."
+            gh release upload nightly nightly-assets/* --clobber
+          else
+            gh release create nightly nightly-assets/* --target "${SHA}" --prerelease --title "NVDS5 Nightly" --notes "Latest successful main build: ${SHA}."
+          fi
+
   release:
     name: Publish GitHub Release
     needs:
       - init
       - build
       - build-posix
-    # Releases happen automatically for v* tag pushes. A manual run can also
-    # be started against an existing v* tag to recover a missed tag event.
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # Stable releases happen for v* tag pushes. Manual runs are also allowed
+    # for recovery/testing.
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_type == 'tag')
     runs-on: ubuntu-26.04
     permissions:
       contents: write
