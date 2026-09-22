@@ -149,7 +149,7 @@ public sealed partial class RenderExecutor
             }
             var writesMemory = hasStorageWrites || program.UsesDeviceAddresses ||
                 program.Buffers.Any(static resource => resource.Written) ||
-                program.Images.Any(static resource => resource.Written || resource.Atomic);
+                program.Images.Any(static resource => resource.Written);
             _host.ShaderAccessBarrier(writesMemory);
         }
 
@@ -241,7 +241,7 @@ public sealed partial class RenderExecutor
         }
 
         var descriptor = BufferDescriptorWords.From(words);
-        if (!resource.Formatted || !resource.Written || resource.Read || resource.Atomic || resource.Scalar || resource.MaxByteExtent != ImageClearStride ||
+        if (!resource.Formatted || !resource.Written || resource.Read || resource.Scalar || resource.MaxByteExtent != ImageClearStride ||
             descriptor.Stride != ImageClearStride || descriptor.Format != BufferDescriptorWords.Format32x4UInt || descriptor.SwizzleEnabled ||
             descriptor.IndexStride != 0 || descriptor.AddThreadId || resource.PackedStride != descriptor.PackedStride ||
             program.UserDataBase != 0 || resources.UserData.Length != ImageClearUserDataCount)
