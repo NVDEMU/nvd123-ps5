@@ -3,24 +3,24 @@
     "assets": {
       "linux-x64": {
         "name": "nvds5-nightly-linux-x64.tar.gz",
-        "sha256": "4a9081520ee449355afd0a7728f77c706ae78f9e1408058f5ba0f842e09fd2db",
-        "size": 61736399,
+        "sha256": "7519ea66cfb91cdd34923a4311f124ec456cdb2c3e3d1547de0f6ece93331309",
+        "size": 61740146,
         "url": "https://github.com/NVDEMU/nvd123-ps5/releases/download/nightly/nvds5-nightly-linux-x64.tar.gz"
       },
       "osx-x64": {
         "name": "nvds5-nightly-osx-x64.zip",
-        "sha256": "012a7a86e14f4523847bf4dc1aebcebabaa7b92ac441b56233ef11f50c9f3c55",
-        "size": 72578207,
+        "sha256": "baa8e9f809270ba113650cb581f95c6a46e24510673440ba243641af42cf92ef",
+        "size": 72579842,
         "url": "https://github.com/NVDEMU/nvd123-ps5/releases/download/nightly/nvds5-nightly-osx-x64.zip"
       },
       "win-x64": {
         "name": "nvds5-nightly-win-x64.zip",
-        "sha256": "22e30635f3bf9c895f8c54c3dbf5783911ee17d1281bd3881b27a40842961cd9",
-        "size": 60052359,
+        "sha256": "d8e3dcd5e6a9c68a54073591bdf1e566631da6c80a6f19b30a6677ef89734017",
+        "size": 60054394,
         "url": "https://github.com/NVDEMU/nvd123-ps5/releases/download/nightly/nvds5-nightly-win-x64.zip"
       }
     },
-    "sha": "5b59b96fa44a936cbd8fbabe9bd2b9f593e8f415",
+    "sha": "9f9e6f630c55e49cc9bd112744540468130942a6",
     "tag": "nightly",
     "version": "0.0.4"
   },
