@@ -17,8 +17,9 @@ namespace SharpEmu.GUI;
 public static class Updater
 {
     private const string ApplyArgument = "--nvds5-apply-update";
-    private const string LatestStableReleaseUrl = "https://api.github.com/repos/NVDEMU/nvd123-ps5/releases/latest";
-    private const string LatestNightlyReleaseUrl = "https://api.github.com/repos/NVDEMU/nvd123-ps5/releases/tags/nightly";
+    // Served from GitHub's raw-content CDN, not the rate-limited REST API.
+    private const string UpdaterManifestUrl =
+        "https://raw.githubusercontent.com/NVDEMU/nvd123-ps5/main/updater-manifest.json";
     private static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(10);
     private static readonly HttpClient Http = CreateHttpClient();
 
@@ -26,52 +27,57 @@ public static class Updater
 
     public sealed record UpdateInfo(string Sha, string Name, string DownloadUrl, long Size, string Sha256, string TagName, UpdateChannel Channel);
 
-    public static async Task<UpdateInfo?> CheckAsync(string? currentSha, UpdateChannel channel, CancellationToken cancellationToken = default)
+    public static async Task<UpdateInfo?> CheckAsync(
+        string? currentSha,
+        UpdateChannel channel,
+        CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(currentSha))
+        {
+            return null;
+        }
+
         var platform = CurrentPlatform();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(CheckTimeout);
 
-        var releaseUrl = channel == UpdateChannel.Nightly ? LatestNightlyReleaseUrl : LatestStableReleaseUrl;
-        using var response = await Http.GetAsync(releaseUrl, timeout.Token);
-        response.EnsureSuccessStatusCode();
-        var update = ParseRelease(
+        var manifestUrl = $"{UpdaterManifestUrl}?v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+        using var response = await Http.GetAsync(manifestUrl, timeout.Token);
+        if (!response.IsSuccessStatusCode)
+        {
+            var detail = await response.Content.ReadAsStringAsync(timeout.Token);
+            throw new HttpRequestException(
+                $"Updater manifest request failed with HTTP {(int)response.StatusCode} ({response.ReasonPhrase}). " +
+                $"{detail}".Trim());
+        }
+
+        var update = ParseManifest(
             await response.Content.ReadAsStringAsync(timeout.Token),
-            null,
             platform.Rid,
             platform.Extension,
             channel);
-        var currentVersion = Assembly.GetExecutingAssembly()
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-        if (update is null || currentSha is null ||
-            string.Equals(update.Sha, currentSha, StringComparison.OrdinalIgnoreCase))
+
+        if (update is null ||
+            string.Equals(NormalizeSha(update.Sha), NormalizeSha(currentSha), StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }
 
-        if (channel == UpdateChannel.Stable &&
-            currentVersion is not null &&
-            TryParseVersion(currentVersion, out var installed) &&
-            TryParseVersion(update.TagName, out var available) &&
-            available.CompareTo(installed) <= 0)
+        if (channel == UpdateChannel.Stable)
         {
-            return null;
+            var currentVersion = Assembly.GetExecutingAssembly()
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+
+            if (currentVersion is not null &&
+                TryParseVersion(currentVersion, out var installed) &&
+                TryParseVersion(update.TagName, out var available) &&
+                available.CompareTo(installed) <= 0)
+            {
+                return null;
+            }
         }
 
-        // Nightly is a moving channel, not a semver release. The nightly tag is
-        // deliberately replaced after every successful main build, so a different
-        // commit SHA means a newer nightly payload is available. Do not apply the
-        // stable-release ancestry/date gate here: it incorrectly reported "up to
-        // date" when the installed build was not an ancestor of the moving nightly.
-        if (channel == UpdateChannel.Nightly)
-        {
-            return update;
-        }
-
-        var comparison = await CompareCommitsAsync(currentSha, update.Sha, timeout.Token);
-        return comparison.Status == "ahead" && comparison.ReleaseDate > comparison.CurrentDate
-            ? update
-            : null;
+        return update;
     }
 
     public static async Task DownloadAndRestartAsync(
@@ -248,122 +254,66 @@ public static class Updater
         return true;
     }
 
-    private static UpdateInfo? ParseRelease(
+    private static UpdateInfo? ParseManifest(
         string json,
-        string? currentSha,
         string rid,
         string extension,
         UpdateChannel channel)
     {
         using var document = JsonDocument.Parse(json);
-        // The nightly release tag is mutable. Prefer the commit recorded in the
-        // release body, but fall back to target_commitish when older releases do
-        // not have the generated notes yet.
-        var releaseSha = ExtractReleaseSha(document.RootElement);
-        if (releaseSha is null &&
-            document.RootElement.TryGetProperty("target_commitish", out var targetProperty) &&
-            targetProperty.ValueKind == JsonValueKind.String)
-        {
-            releaseSha = NormalizeSha(targetProperty.GetString());
-        }
-        var candidates = new List<(DateTimeOffset Created, UpdateInfo Update)>();
-        foreach (var asset in document.RootElement.GetProperty("assets").EnumerateArray())
-        {
-            var name = asset.GetProperty("name").GetString() ?? "";
-            var marker = $"-{rid}";
-            var markerIndex = name.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
-            if (!name.EndsWith(extension, StringComparison.OrdinalIgnoreCase) ||
-                markerIndex < 0)
-            {
-                continue;
-            }
-
-            var suffix = name[(markerIndex + marker.Length)..^extension.Length].TrimStart('-');
-            var assetSha = suffix.Length >= 7 && suffix.All(Uri.IsHexDigit)
-                ? suffix
-                : releaseSha;
-            if (assetSha is null ||
-                !asset.TryGetProperty("digest", out var digestProperty) ||
-                digestProperty.ValueKind != JsonValueKind.String)
-            {
-                continue;
-            }
-
-            var digest = digestProperty.GetString() ?? "";
-            if (!digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ||
-                digest.Length != "sha256:".Length + 64 ||
-                !digest["sha256:".Length..].All(Uri.IsHexDigit))
-            {
-                continue;
-            }
-
-            candidates.Add((
-                asset.GetProperty("created_at").GetDateTimeOffset(),
-                new UpdateInfo(
-                    assetSha,
-                    name,
-                    asset.GetProperty("browser_download_url").GetString()!,
-                    asset.GetProperty("size").GetInt64(),
-                    digest["sha256:".Length..],
-                    document.RootElement.GetProperty("tag_name").GetString() ?? "",
-                    channel)));
-        }
-
-        var latest = candidates.OrderByDescending(candidate => candidate.Created).FirstOrDefault().Update;
-        if (latest is null)
-        {
-            return null;
-        }
-
-        // BuildInfo intentionally stores a 7-character SHA, while some callers
-        // may provide the full Git commit. Compare normalized short SHAs so the
-        // updater does not miss an update merely because the SHA lengths differ.
-        return currentSha is not null &&
-               string.Equals(NormalizeSha(latest.Sha), NormalizeSha(currentSha), StringComparison.OrdinalIgnoreCase)
-            ? null
-            : latest;
-    }
-
-    private static async Task<CommitComparison> CompareCommitsAsync(
-        string currentSha,
-        string releaseSha,
-        CancellationToken cancellationToken)
-    {
-        var url = $"https://api.github.com/repos/NVDEMU/nvd123-ps5/compare/{currentSha}...{releaseSha}";
-        using var response = await Http.GetAsync(url, cancellationToken);
-        response.EnsureSuccessStatusCode();
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
         var root = document.RootElement;
-        var currentDate = root.GetProperty("base_commit").GetProperty("commit").GetProperty("committer").GetProperty("date").GetDateTimeOffset();
-        var releaseDate = currentDate;
-        if (root.TryGetProperty("commits", out var commits) && commits.GetArrayLength() > 0)
-        {
-            releaseDate = commits[commits.GetArrayLength() - 1]
-                .GetProperty("commit").GetProperty("committer").GetProperty("date").GetDateTimeOffset();
-        }
+        var channelName = channel == UpdateChannel.Nightly ? "nightly" : "stable";
 
-        return new CommitComparison(root.GetProperty("status").GetString() ?? "", currentDate, releaseDate);
-    }
-
-    private static string? ExtractReleaseSha(JsonElement release)
-    {
-        if (!release.TryGetProperty("body", out var bodyProperty) ||
-            bodyProperty.ValueKind != JsonValueKind.String)
+        if (!root.TryGetProperty(channelName, out var channelElement) ||
+            channelElement.ValueKind != JsonValueKind.Object ||
+            !channelElement.TryGetProperty("tag", out var tagProperty) ||
+            tagProperty.ValueKind != JsonValueKind.String ||
+            !channelElement.TryGetProperty("sha", out var shaProperty) ||
+            shaProperty.ValueKind != JsonValueKind.String ||
+            !channelElement.TryGetProperty("assets", out var assetsProperty) ||
+            assetsProperty.ValueKind != JsonValueKind.Object ||
+            !assetsProperty.TryGetProperty(rid, out var asset) ||
+            asset.ValueKind != JsonValueKind.Object)
         {
             return null;
         }
 
-        var body = bodyProperty.GetString();
-        var match = Regex.Match(
-            body ?? "",
-            @"\bcommit\s+([0-9a-f]{7,40})\b",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        if (!match.Success)
+        var tag = tagProperty.GetString();
+        var sha = NormalizeSha(shaProperty.GetString());
+        if (string.IsNullOrWhiteSpace(tag) || string.IsNullOrWhiteSpace(sha))
         {
             return null;
         }
 
-        return NormalizeSha(match.Groups[1].Value);
+        if (!asset.TryGetProperty("name", out var nameProperty) ||
+            nameProperty.ValueKind != JsonValueKind.String ||
+            !asset.TryGetProperty("url", out var urlProperty) ||
+            urlProperty.ValueKind != JsonValueKind.String ||
+            !asset.TryGetProperty("size", out var sizeProperty) ||
+            sizeProperty.ValueKind != JsonValueKind.Number ||
+            !asset.TryGetProperty("sha256", out var hashProperty) ||
+            hashProperty.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        var name = nameProperty.GetString();
+        var url = urlProperty.GetString();
+        var sha256 = hashProperty.GetString();
+
+        if (string.IsNullOrWhiteSpace(name) ||
+            string.IsNullOrWhiteSpace(url) ||
+            string.IsNullOrWhiteSpace(sha256) ||
+            !sizeProperty.TryGetInt64(out var size) ||
+            size < 0 ||
+            !name.EndsWith(extension, StringComparison.OrdinalIgnoreCase) ||
+            sha256.Length != 64 ||
+            !sha256.All(Uri.IsHexDigit))
+        {
+            return null;
+        }
+
+        return new UpdateInfo(sha, name, url, size, sha256, tag, channel);
     }
 
     private static string? NormalizeSha(string? sha)
@@ -470,7 +420,6 @@ public static class Updater
     }
 
     private sealed record PlatformInfo(string Rid, string Extension, string ExecutableName);
-    private sealed record CommitComparison(string Status, DateTimeOffset CurrentDate, DateTimeOffset ReleaseDate);
     private readonly record struct ReleaseVersion(int Major, int Minor, int Patch, string PreRelease) : IComparable<ReleaseVersion>
     {
         public int CompareTo(ReleaseVersion other) =>
