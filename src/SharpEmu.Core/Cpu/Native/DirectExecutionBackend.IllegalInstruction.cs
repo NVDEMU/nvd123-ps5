@@ -84,7 +84,7 @@ public sealed partial class DirectExecutionBackend
 
     private unsafe bool TryRecoverKnownUd2TrapStub(void* contextRecord, ulong rip)
     {
-        Span<byte> code = stackalloc byte[16];
+        var code = new byte[16];
         if (!TryReadExecutableBytes(rip, code) ||
             code[0] != 0x0F || code[1] != 0x0B || // UD2
             code[2] != 0xE8 || // CALL rel32 (dead/noreturn tail)
