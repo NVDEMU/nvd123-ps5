@@ -264,6 +264,19 @@ public sealed partial class DirectExecutionBackend
 				}
 			}
 		}
+		if (string.Equals(importStubEntry.Nid, "Ou3iL1abvng", StringComparison.Ordinal) &&
+			TryRecoverStackCheckFailureBridge(
+				num7,
+				importStubEntry.Address,
+				out var stackCheckBridgeReturn))
+		{
+			*(ulong*)(argPackPtr + 96) = stackCheckBridgeReturn;
+			cpuContext[CpuRegister.Rax] = 0;
+			Console.Error.WriteLine(
+				$"[LOADER][WARN] Recovered __stack_chk_fail branch -> 0x{stackCheckBridgeReturn:X16}");
+			return 0;
+		}
+
 		// Diagnostic compatibility escape hatch for a guest stack-protector
 		// failure whose noreturn call is immediately followed by UD2. Retail
 		// compilers use several equivalent conditional-fail epilogues, so scan only
@@ -1879,6 +1892,80 @@ public sealed partial class DirectExecutionBackend
 		return returnSlotAddress != 0 &&
 			ActiveCpuContext is not null &&
 			ActiveCpuContext.TryWriteUInt64(returnSlotAddress, hostExit);
+	}
+
+	private unsafe static bool TryRecoverStackCheckFailureBridge(
+		ulong returnRip,
+		ulong stackCheckImportAddress,
+		out ulong recoveredReturn)
+	{
+		recoveredReturn = 0;
+		if (returnRip < 0x100 || stackCheckImportAddress < 0x100)
+		{
+			return false;
+		}
+
+		var code = (byte*)returnRip;
+		var call = code - 5;
+		if (call[0] != 0xE8)
+		{
+			return false;
+		}
+
+		var callDisp = BinaryPrimitives.ReadInt32LittleEndian(
+			new ReadOnlySpan<byte>(call + 1, sizeof(int)));
+		var callTarget = unchecked((ulong)(nint)(call + 5 + callDisp));
+		if (callTarget != stackCheckImportAddress)
+		{
+			return false;
+		}
+
+		for (var offset = 6; offset <= 128; offset++)
+		{
+			var branch = code - offset;
+			var branchLength = 0;
+			long displacement;
+			if (branch[0] == 0x0F && (branch[1] & 0xF0) == 0x80)
+			{
+				branchLength = 6;
+				displacement = BinaryPrimitives.ReadInt32LittleEndian(
+					new ReadOnlySpan<byte>(branch + 2, sizeof(int)));
+			}
+			else if (branch[0] is >= 0x70 and <= 0x7F)
+			{
+				branchLength = 2;
+				displacement = unchecked((sbyte)branch[1]);
+			}
+			else
+			{
+				continue;
+			}
+
+			var branchTarget = unchecked((ulong)(nint)(branch + branchLength + displacement));
+			var branchDelta = (nint)branchTarget - (nint)branch;
+			if (branchDelta >= 0 || branchDelta < -0x20000)
+			{
+				continue;
+			}
+
+			for (var scan = branchLength; scan <= offset - 5; scan++)
+			{
+				var jump = branch + scan;
+				if (jump[0] != 0xE9)
+				{
+					continue;
+				}
+				var jumpDisp = BinaryPrimitives.ReadInt32LittleEndian(
+					new ReadOnlySpan<byte>(jump + 1, sizeof(int)));
+				var jumpTarget = unchecked((ulong)(nint)(jump + 5 + jumpDisp));
+				if (jumpTarget == branchTarget)
+				{
+					recoveredReturn = branchTarget;
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	private unsafe static bool TryRecoverStackCheckEpilogue(

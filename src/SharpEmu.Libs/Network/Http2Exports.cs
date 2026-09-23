@@ -209,6 +209,17 @@ public static class Http2Exports
     }
 
     [SysAbiExport(
+        Nid = "A+NVAFu4eCg",
+        ExportName = "sceHttp2SendRequestAsync",
+        Target = Generation.Gen4 | Generation.Gen5,
+        LibraryName = "libSceHttp2")]
+    public static int Http2SendRequestAsync(CpuContext ctx)
+    {
+        ctx[CpuRegister.Rax] = 0;
+        return (int)OrbisGen2Result.ORBIS_GEN2_OK;
+    }
+
+    [SysAbiExport(
         ExportName = "sceHttp2DeleteRequest",
         Target = Generation.Gen5,
         LibraryName = "libSceHttp2")]
