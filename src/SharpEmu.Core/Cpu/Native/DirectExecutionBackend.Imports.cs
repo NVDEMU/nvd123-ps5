@@ -162,7 +162,7 @@ public sealed partial class DirectExecutionBackend
 		var catalogKnown = Aerolib.Instance.TryGetByNid(
 			importStubEntry.Nid,
 			out var symbol);
-		var name = catalogKnown && symbol is not null
+		var name = catalogKnown
 			? symbol.ExportName
 			: importStubEntry.Nid;
 
@@ -295,9 +295,9 @@ public sealed partial class DirectExecutionBackend
 
 		if (name == "sceGnmSubmitAndFlipCommandBuffers")
 		{
-			if (!ctx.TryReadUInt64(ctx.Rsp + 0x08, out var bufferIndex) ||
-				!ctx.TryReadUInt64(ctx.Rsp + 0x10, out var flipMode) ||
-				!ctx.TryReadUInt64(ctx.Rsp + 0x18, out var flipArgument))
+			if (!ctx.TryReadUInt64(ctx[CpuRegister.Rsp] + 0x08, out var bufferIndex) ||
+				!ctx.TryReadUInt64(ctx[CpuRegister.Rsp] + 0x10, out var flipMode) ||
+				!ctx.TryReadUInt64(ctx[CpuRegister.Rsp] + 0x18, out var flipArgument))
 			{
 				ctx[CpuRegister.Rax] = unchecked((ulong)(int)OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT);
 				return (int)OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT;
@@ -310,7 +310,7 @@ public sealed partial class DirectExecutionBackend
 				ctx[CpuRegister.Rdx],
 				ctx[CpuRegister.Rcx],
 				ctx[CpuRegister.R8],
-				ctx[CpuRegister.R9],
+				unchecked((int)ctx[CpuRegister.R9]),
 				unchecked((int)bufferIndex),
 				unchecked((int)flipMode),
 				unchecked((long)flipArgument));
@@ -318,10 +318,10 @@ public sealed partial class DirectExecutionBackend
 
 		// Workload variant has one extra leading argument, shifting the flip
 		// parameters onto stack slots 0..3 after the six register arguments.
-		if (!ctx.TryReadUInt64(ctx.Rsp + 0x08, out var workloadVideoOutHandle) ||
-			!ctx.TryReadUInt64(ctx.Rsp + 0x10, out var workloadBufferIndex) ||
-			!ctx.TryReadUInt64(ctx.Rsp + 0x18, out var workloadFlipMode) ||
-			!ctx.TryReadUInt64(ctx.Rsp + 0x20, out var workloadFlipArgument))
+		if (!ctx.TryReadUInt64(ctx[CpuRegister.Rsp] + 0x08, out var workloadVideoOutHandle) ||
+			!ctx.TryReadUInt64(ctx[CpuRegister.Rsp] + 0x10, out var workloadBufferIndex) ||
+			!ctx.TryReadUInt64(ctx[CpuRegister.Rsp] + 0x18, out var workloadFlipMode) ||
+			!ctx.TryReadUInt64(ctx[CpuRegister.Rsp] + 0x20, out var workloadFlipArgument))
 		{
 			ctx[CpuRegister.Rax] = unchecked((ulong)(int)OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT);
 			return (int)OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT;
