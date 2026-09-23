@@ -13,19 +13,13 @@ The firmware installer accepts an official PS4 `PS4UPDATE.PUP` file:
 
     NVDEMU --install-ps4-firmware /path/to/PS4UPDATE.PUP
 
-The installer validates the PUP header and then looks for a user-selected PUP extraction backend. Set:
+PUP handling is performed **inside NVDEMU**. There is no required `PupTool`, `NVDEMU_PUPTOOL` environment variable, or separately installed PUP extractor.
 
-    NVDEMU_PUPTOOL=/path/to/PupTool
+NVDEMU validates the PUP header and contains a built-in reader for the unencrypted SLB2 container layout. It extracts container entries into a temporary staging area and scans the extracted payloads for valid `libSce*.sprx` ELF firmware modules before installing them into `sys_modules`.
 
-The backend is invoked as:
+PS4 update packages can contain protected/encrypted firmware payloads. The PUP format documentation describes encrypted segment metadata and keys, and existing open-source PUP unpackers likewise distinguish container unpacking from the protected decryption step. citeturn1search0turn1search2 NVDEMU does not bundle Sony private keys or implement protected-PUP key recovery/decryption. Consequently, an untouched retail PUP may be recognized and parsed while still reporting that its protected payloads cannot be turned into loadable modules.
 
-    PupTool pup_extract <input.pup> <output-directory>
-
-Any resulting valid `libSce*.sprx` ELF modules are installed into NVDEMU's `sys_modules` directory.
-
-This design lets users supply a Sony-distributed firmware PUP without making NVDEMU ship Sony firmware. NVDEMU does not contain Sony private keys or a protected-PUP decryption implementation. A backend must therefore perform any protected firmware processing using material the user is authorized to use.
-
-A PUP can be accepted and identified even when no backend is installed; in that case NVDEMU reports exactly what is missing rather than treating the PUP as an ordinary ZIP file.
+For user-owned firmware, NVDEMU also continues to accept already-decrypted firmware module directories, ZIP archives, and individual `.sprx` files. Emulator firmware modules are loaded from `sys_modules` at PS4 runtime; this matches the established LLE firmware-module model used by PS4 emulators. citeturn0search0
 
 ## Other firmware inputs
 
