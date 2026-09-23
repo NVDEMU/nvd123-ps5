@@ -122,6 +122,12 @@ internal static partial class Program
             }
         }
 
+        // Optional platform hint. Auto remains the default; package metadata still
+        // wins when a PS4/PS5 package is supplied. The hint is also exported so
+        // HLE/input diagnostics can report the selected target consistently.
+        args = NormalizePlatformArguments(args, out var platformMode);
+        Environment.SetEnvironmentVariable("NVDEMU_PLATFORM", platformMode);
+
         if (args.Length == 0)
         {
             return GuiLauncher.Run();
@@ -343,9 +349,12 @@ internal static partial class Program
         // is available. This isolates package handling from SELF/ELF loading.
         if (PlayStationPackage.TryReadInfo(ebootPath, out var packageInfo))
         {
+            var detectedPlatform = packageInfo.Format == PlayStationPackageFormat.Ps5Fih ? "PS5" : "PS4";
             Console.Error.WriteLine(
-                $"[PKG] Detected {(packageInfo.Format == PlayStationPackageFormat.Ps5Fih ? "PS5 FIH" : "PS4 CNT")} package" +
+                $"[{detectedPlatform}] Package detected: {(packageInfo.Format == PlayStationPackageFormat.Ps5Fih ? "FIH" : "CNT")}" +
                 $" titleId={packageInfo.TitleId ?? "(unknown)"} contentId={packageInfo.ContentId ?? "(unknown)"}");
+            Console.Error.WriteLine(
+                $"[{detectedPlatform}] Shared controller input enabled; keyboard/gamepad mappings are platform-neutral.");
 
             if (PlayStationPackageStager.TryStageApplication(
                     ebootPath,
@@ -1522,6 +1531,42 @@ internal static partial class Program
             return defaults;
         }
     }
+
+    private static string[] NormalizePlatformArguments(string[] args, out string platform)
+    {
+        platform = "auto";
+        var filtered = new List<string>(args.Length);
+        for (var i = 0; i < args.Length; i++)
+        {
+            var argument = args[i];
+            if (string.Equals(argument, "--platform", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 < args.Length)
+                {
+                    platform = NormalizePlatformName(args[++i]);
+                }
+                continue;
+            }
+
+            if (argument.StartsWith("--platform=", StringComparison.OrdinalIgnoreCase))
+            {
+                platform = NormalizePlatformName(argument["--platform=".Length..]);
+                continue;
+            }
+
+            filtered.Add(argument);
+        }
+
+        return filtered.ToArray();
+    }
+
+    private static string NormalizePlatformName(string value) =>
+        value.Trim().ToLowerInvariant() switch
+        {
+            "ps4" => "ps4",
+            "ps5" => "ps5",
+            _ => "auto",
+        };
 
     private static bool TrySplitOption(string argument, string name, out string value)
     {
