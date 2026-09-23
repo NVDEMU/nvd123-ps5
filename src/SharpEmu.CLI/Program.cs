@@ -187,6 +187,12 @@ internal static partial class Program
             _ = MacSetEnv("MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS", "0", 0);
             _ = MacSetEnv("MVK_CONFIG_SHOULD_MAXIMIZE_CONCURRENT_COMPILATION", "1", 0);
             _ = MacSetEnv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1", 0);
+            // MoltenVK 1.4.x uses placement heaps by default. Keep them off for
+            // the emulator: guest GPU resources are frequently rebound and the
+            // heap path can amplify stale-resource/aliasing failures into a
+            // Metal command-buffer GPU hang. This is also a useful conservative
+            // default for Rosetta + Apple Silicon compatibility.
+            _ = MacSetEnv("MVK_CONFIG_USE_MTLHEAP", "0", 0);
             _ = MacSetEnv("MVK_CONFIG_RESUME_LOST_DEVICE", "1", 0);
         }
         catch (Exception exception)
