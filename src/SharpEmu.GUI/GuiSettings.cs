@@ -63,7 +63,7 @@ public sealed class GuiSettings
     public bool CheckForUpdatesOnStartup { get; set; } = true;
 
     /// <summary>Release channel used by the in-app updater: Stable or Nightly.</summary>
-    public string UpdateChannel { get; set; } = "Stable";
+    public string UpdateChannel { get; set; } = "Nightly";
 
     public string WindowMode { get; set; } = "Windowed";
 
