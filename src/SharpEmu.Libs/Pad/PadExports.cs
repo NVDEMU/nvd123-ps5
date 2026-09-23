@@ -113,7 +113,10 @@ public static class PadExports
             return ctx.SetReturn(OrbisPadErrorDeviceNoHandle);
         }
 
-        var typeAccepted = extended ? type is 0 or 1 or 2 : type == StandardPortType;
+        // Retail titles use standard, special, and remote-control port types with
+        // scePadOpen(). The emulator exposes one logical controller, so all supported
+        // port types map to that controller; scePadOpenExt already used the same set.
+        var typeAccepted = type is 0 or 1 or 2;
         if (userId != PrimaryUserId || !typeAccepted || index != 0 || (!extended && parameterAddress != 0))
         {
             return ctx.SetReturn(OrbisPadErrorDeviceNotConnected);
