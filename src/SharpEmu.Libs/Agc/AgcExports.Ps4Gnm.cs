@@ -41,8 +41,9 @@ public static partial class AgcExports
         {
             var dcbPointerAddress = dcbAddresses + ((ulong)i * sizeof(ulong));
             var sizeAddress = dcbSizes + ((ulong)i * sizeof(uint));
+            uint sizeBytes = 0;
             if (!ctx.TryReadUInt64(dcbPointerAddress, out var commandAddress) ||
-                !ctx.TryReadUInt32(sizeAddress, out var sizeBytes) ||
+                !ctx.TryReadUInt32(sizeAddress, out sizeBytes) ||
                 commandAddress == 0 ||
                 sizeBytes == 0 ||
                 (sizeBytes & 3) != 0)
@@ -141,11 +142,10 @@ public static partial class AgcExports
 
     internal static int SubmitPs4GnmDone(CpuContext ctx)
     {
-        var outcome = GuestGpu.Current.SubmitDone(ctx.Memory);
-        var result = outcome == IdleOutcome.Completed
-            ? OrbisGen2Result.ORBIS_GEN2_OK
-            : OrbisGen2Result.ORBIS_GEN2_ERROR_CANCELED;
-        ctx[CpuRegister.Rax] = unchecked((ulong)(int)result);
-        return (int)result;
+        // SubmitDone owns the renderer-side completion policy (including GPU waits).
+        // The PS4 export itself reports ORBIS_OK after the completion boundary.
+        GuestGpu.Current.SubmitDone(ctx.Memory);
+        ctx[CpuRegister.Rax] = 0;
+        return (int)OrbisGen2Result.ORBIS_GEN2_OK;
     }
 }
