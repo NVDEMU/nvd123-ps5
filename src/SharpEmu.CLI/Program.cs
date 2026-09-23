@@ -1164,6 +1164,25 @@ internal static partial class Program
         for (var i = 0; i < args.Length; i++)
         {
             var argument = args[i];
+
+            if (string.Equals(argument, "--pkg-keys", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 >= args.Length)
+                {
+                    ebootPath = string.Empty;
+                    runtimeOptions = default;
+                    return false;
+                }
+
+                i++;
+                continue;
+            }
+
+            if (argument.StartsWith("--pkg-keys=", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             if (TrySplitOption(argument, "--window-mode", out var windowModeText))
             {
                 if (!TryParseWindowMode(windowModeText, out var windowMode))
