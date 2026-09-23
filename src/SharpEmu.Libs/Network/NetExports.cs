@@ -99,6 +99,30 @@ public static class NetExports
     }
 
     [SysAbiExport(
+        Nid = "6Oc0bLsIYe0",
+        ExportName = "sceNetGetMacAddress",
+        Target = Generation.Gen4 | Generation.Gen5,
+        LibraryName = "libSceNet")]
+    public static int NetGetMacAddress(CpuContext ctx)
+    {
+        var address = ctx[CpuRegister.Rdi];
+        if (address == 0)
+        {
+            return SetNetError(ctx, NetErrorInvalidArgument, NetErrnoInvalidArgument);
+        }
+
+        // Use a stable locally-administered emulator address rather than exposing the
+        // host machine's physical adapter identity to the guest.
+        ReadOnlySpan<byte> mac = stackalloc byte[] { 0x02, 0x53, 0x48, 0x45, 0x4D, 0x55 };
+        if (!ctx.Memory.TryWrite(address, mac))
+        {
+            return SetNetError(ctx, NetErrorInvalidArgument, NetErrnoInvalidArgument);
+        }
+
+        return ctx.SetReturn(0);
+    }
+
+    [SysAbiExport(
         Nid = "cTGkc6-TBlI",
         ExportName = "sceNetTerm",
         Target = Generation.Gen4 | Generation.Gen5,
