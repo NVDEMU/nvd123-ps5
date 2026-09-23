@@ -186,7 +186,7 @@ internal static partial class Program
         {
             _ = MacSetEnv("MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS", "0", 0);
             _ = MacSetEnv("MVK_CONFIG_SHOULD_MAXIMIZE_CONCURRENT_COMPILATION", "1", 0);
-            _ = MacSetEnv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1", 0);
+            // Apple Silicon argument-buffer path has known MoltenVK 1.4.x compute/resource correctness issues.\n            // Prefer direct Metal resource bindings for emulator guest workloads; this also avoids\n            // argument-buffer residency hazards that can escalate into a device-lost GPU submission.\n            _ = MacSetEnv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "0", 0);
             _ = MacSetEnv("MVK_CONFIG_RESUME_LOST_DEVICE", "1", 0);
         }
         catch (Exception exception)
