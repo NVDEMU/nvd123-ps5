@@ -705,8 +705,8 @@ public static class PadExports
         var buttons = acceptsKeyboardInput ? ReadKeyboardButtons(input) : 0;
         var leftX = acceptsKeyboardInput ? ReadAnalogStick(input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Left)), input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Right))) : (byte)128;
         var leftY = acceptsKeyboardInput ? ReadAnalogStick(input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Up)), input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Down))) : (byte)128;
-        var rightX = acceptsKeyboardInput ? ReadAnalogStick(input.IsKeyDown(0x4A), input.IsKeyDown(0x4C)) : (byte)128;
-        var rightY = acceptsKeyboardInput ? ReadAnalogStick(input.IsKeyDown(0x49), input.IsKeyDown(0x4B)) : (byte)128;
+        var rightX = acceptsKeyboardInput ? ReadAnalogStick(input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.RightStickLeft)), input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.RightStickRight))) : (byte)128;
+        var rightY = acceptsKeyboardInput ? ReadAnalogStick(input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.RightStickUp)), input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.RightStickDown))) : (byte)128;
         var l2 = acceptsKeyboardInput && input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.L2)) ? (byte)255 : (byte)0;
         var r2 = acceptsKeyboardInput && input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.R2)) ? (byte)255 : (byte)0;
         var gamepadType = HostGamepadType.Generic;
@@ -875,6 +875,7 @@ public static class PadExports
         if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.R3))) buttons |= OrbisPadButton.R3;
         if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Options))) buttons |= OrbisPadButton.Options;
         if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Share))) buttons |= OrbisPadButton.Share;
+        if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.TouchPad))) buttons |= OrbisPadButton.TouchPad;
         return buttons;
     }
 
