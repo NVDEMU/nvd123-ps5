@@ -165,6 +165,31 @@ public static class Http2Exports
     }
 
     [SysAbiExport(
+        Nid = "nrPfOE8TQu0",
+        ExportName = "sceHttp2AddRequestHeader",
+        Target = Generation.Gen4 | Generation.Gen5,
+        LibraryName = "libSceHttp2")]
+    public static int Http2AddRequestHeader(CpuContext ctx)
+    {
+        var requestId = unchecked((int)ctx[CpuRegister.Rdi]);
+        if (!Requests.ContainsKey(requestId))
+        {
+            return ctx.SetReturn(Http2ErrorInvalidId);
+        }
+
+        // Header construction is accepted for single-player/local startup. HTTP2
+        // transmission remains blocked by the existing emulator network policy.
+        if (!TryReadUtf8Z(ctx, ctx[CpuRegister.Rsi], 4096, out _) ||
+            !TryReadUtf8Z(ctx, ctx[CpuRegister.Rdx], 8192, out _))
+        {
+            return ctx.SetReturn(Http2ErrorInvalidValue);
+        }
+
+        TraceHttp2("add_header", requestId, ctx[CpuRegister.Rsi], ctx[CpuRegister.Rdx], ctx[CpuRegister.Rcx], 0);
+        return ctx.SetReturn(0);
+    }
+
+    [SysAbiExport(
         ExportName = "sceHttp2DeleteRequest",
         Target = Generation.Gen5,
         LibraryName = "libSceHttp2")]
