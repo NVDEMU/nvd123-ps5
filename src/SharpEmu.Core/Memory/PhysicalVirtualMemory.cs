@@ -1259,6 +1259,16 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
                 }
 
                 var candidate = start + padding;
+
+                // FindFreeAddress() is a snapshot of the backing-space free list.
+                // Windows host-region probing below can advance the search cursor
+                // past that snapshot. Never hand the caller a cached address that
+                // is now below the current candidate; refresh the snapshot instead.
+                if (reservedCandidate != 0 && reservedCandidate < candidate)
+                {
+                    reservedCandidate = _backedSpace.FindFreeAddress(start, limit, size, alignment);
+                }
+
                 if (reservedCandidate != 0 && candidate >= reservedCandidate)
                 {
                     address = reservedCandidate;
