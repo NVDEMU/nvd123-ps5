@@ -113,34 +113,72 @@ public static class PlayStationPackage
 
         packageInfo = info;
 
-        var directory = Path.GetDirectoryName(Path.GetFullPath(packagePath)) ?? string.Empty;
-        var stem = Path.GetFileNameWithoutExtension(packagePath);
+        var fullPackagePath = Path.GetFullPath(packagePath);
+        var directory = Path.GetDirectoryName(fullPackagePath) ?? string.Empty;
+        var stem = Path.GetFileNameWithoutExtension(fullPackagePath);
 
-        var candidates = new[]
+        var roots = new[]
         {
-            Path.Combine(directory, stem + "-app0", "eboot.bin"),
-            Path.Combine(directory, stem + "_app0", "eboot.bin"),
-            Path.Combine(directory, "app0", "eboot.bin"),
-        };
+            Path.Combine(directory, stem),
+            Path.Combine(directory, stem + "-app0"),
+            Path.Combine(directory, stem + "_app0"),
+            Path.Combine(directory, "app0"),
+            string.IsNullOrWhiteSpace(info.TitleId) ? string.Empty : Path.Combine(directory, info.TitleId),
+            string.IsNullOrWhiteSpace(info.TitleId) ? string.Empty : Path.Combine(directory, info.TitleId + "-app0"),
+            string.IsNullOrWhiteSpace(info.TitleId) ? string.Empty : Path.Combine(directory, info.TitleId + "_app0"),
+            fullPackagePath + ".extracted",
+        }
+        .Where(Directory.Exists)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
 
-        if (!string.IsNullOrWhiteSpace(info.TitleId))
+        foreach (var root in roots)
         {
-            candidates = candidates
-                .Concat(new[]
-                {
-                    Path.Combine(directory, info.TitleId + "-app0", "eboot.bin"),
-                    Path.Combine(directory, info.TitleId + "_app0", "eboot.bin"),
-                })
-                .ToArray();
+            if (TryFindApplicationEboot(root, out ebootPath))
+                return true;
         }
 
-        foreach (var candidate in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
+        return false;
+    }
+
+    private static bool TryFindApplicationEboot(string root, out string ebootPath)
+    {
+        ebootPath = string.Empty;
+
+        var direct = new[]
+        {
+            Path.Combine(root, "eboot.bin"),
+            Path.Combine(root, "app0", "eboot.bin"),
+            Path.Combine(root, "app", "eboot.bin"),
+        };
+
+        foreach (var candidate in direct)
         {
             if (File.Exists(candidate))
             {
                 ebootPath = candidate;
                 return true;
             }
+        }
+
+        try
+        {
+            foreach (var candidate in Directory.EnumerateFiles(root, "eboot.bin", SearchOption.AllDirectories))
+            {
+                var relative = Path.GetRelativePath(root, candidate);
+                var depth = relative.Count(c => c == Path.DirectorySeparatorChar);
+                if (depth <= 4)
+                {
+                    ebootPath = candidate;
+                    return true;
+                }
+            }
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
         }
 
         return false;
