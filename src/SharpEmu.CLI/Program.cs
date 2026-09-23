@@ -93,6 +93,35 @@ internal static partial class Program
 
         args = NormalizeInternalArguments(args, out var isMitigatedChild);
 
+        if (args.Any(static argument =>
+                string.Equals(argument, "--create-pkg-key-file", StringComparison.OrdinalIgnoreCase)))
+        {
+            var path = PlayStationPackageKeyStore.EnsureTemplate();
+            Console.WriteLine($"[PKG][KEYS] Created package key template: {path}");
+            Console.WriteLine("[PKG][KEYS] Add only key material you are authorized to use, then launch the package again.");
+            return 0;
+        }
+
+        // --pkg-keys is intentionally handled before emulation starts so the
+        // package staging layer and any future in-process backend see the same
+        // user-selected key file.
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (string.Equals(args[i], "--pkg-keys", StringComparison.OrdinalIgnoreCase) &&
+                i + 1 < args.Length)
+            {
+                Environment.SetEnvironmentVariable("NVDEMU_PKG_KEYS", args[++i]);
+                continue;
+            }
+
+            if (args[i].StartsWith("--pkg-keys=", StringComparison.OrdinalIgnoreCase))
+            {
+                Environment.SetEnvironmentVariable(
+                    "NVDEMU_PKG_KEYS",
+                    args[i]["--pkg-keys=".Length..]);
+            }
+        }
+
         if (args.Length == 0)
         {
             return GuiLauncher.Run();
