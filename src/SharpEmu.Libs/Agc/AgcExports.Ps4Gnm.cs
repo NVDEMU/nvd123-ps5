@@ -230,6 +230,42 @@ public static partial class AgcExports
         }
     }
 
+    [SysAbiExport(
+        Nid = "ArSg-TGinhk",
+        ExportName = "sceGnmUnmapComputeQueue",
+        Target = Generation.Gen4,
+        LibraryName = "libSceGnmDriver")]
+    public static int Ps4GnmUnmapComputeQueueExport(CpuContext ctx)
+    {
+        ctx[CpuRegister.Rax] = 0;
+        return (int)OrbisGen2Result.ORBIS_GEN2_OK;
+    }
+
+    [SysAbiExport(
+        Nid = "iCO804ZgzdA",
+        ExportName = "sceGnmValidateCommandBuffers",
+        Target = Generation.Gen4,
+        LibraryName = "libSceGnmDriver")]
+    public static int Ps4GnmValidateCommandBuffersExport(CpuContext ctx)
+    {
+        // Validation is performed by the command-stream parser when the queue is
+        // submitted; accepting the pre-submit validation call keeps the PS4 ABI
+        // contract compatible without duplicating that parser.
+        ctx[CpuRegister.Rax] = 0;
+        return (int)OrbisGen2Result.ORBIS_GEN2_OK;
+    }
+
+    [SysAbiExport(
+        Nid = "SXw4dZEkgpA",
+        ExportName = "sceGnmValidateDisableDiagnostics",
+        Target = Generation.Gen4,
+        LibraryName = "libSceGnmDriver")]
+    public static int Ps4GnmValidateDisableDiagnosticsExport(CpuContext ctx)
+    {
+        ctx[CpuRegister.Rax] = 0;
+        return (int)OrbisGen2Result.ORBIS_GEN2_OK;
+    }
+
     internal static int SubmitPs4GnmDone(CpuContext ctx)
     {
         // SubmitDone owns the renderer-side completion policy (including GPU waits).
