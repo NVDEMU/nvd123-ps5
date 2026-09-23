@@ -275,7 +275,11 @@ public static class LibcStdioExports
 
         if (!_fileHandles.TryGetValue(handle, out var file))
         {
-            return StdioStatusFailure(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_INVALID_ARGUMENT, Ebadf);
+            // Foreign FILE objects belong to the title's bundled libc. setvbuf only
+            // changes buffering policy, so treating an unknown FILE* as a successful
+            // no-op avoids crossing the two libc ABIs.
+            ctx[CpuRegister.Rax] = 0;
+            return (int)OrbisGen2Result.ORBIS_GEN2_OK;
         }
 
         if (positionAddress == 0)

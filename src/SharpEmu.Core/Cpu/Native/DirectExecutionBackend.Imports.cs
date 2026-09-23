@@ -1516,7 +1516,7 @@ public sealed partial class DirectExecutionBackend
 		rsi != 0 &&
 		// Retail/runtime revisions observed in New Joe & Mac use several descriptor tags here.
 		// Keep this compatibility path limited to known ABI variants instead of treating every call as optional.
-		rdx is 0x000144CA00000000UL or 0x0001469800000000UL or 0x0001681800000000UL or 0x00016D1600000000UL or 0x0001714500000000UL or 0x0001723C00000000UL &&
+		rdx is 0x000144CA00000000UL or 0x0001469800000000UL or 0x0001681800000000UL or 0x00016D1600000000UL or 0x0001714500000000UL or 0x0001723C00000000UL or 0x000179A500000000UL &&
 		rcx == 1 &&
 		r8 != 0 &&
 		r9 != 0;
@@ -1593,6 +1593,9 @@ public sealed partial class DirectExecutionBackend
 		var expectedSaveDataMemoryNotReady =
 			string.Equals(nid, "QwOO7vegnV8", StringComparison.Ordinal) &&
 			resultValue == unchecked((int)0x809F0012);
+		var expectedOfflineNetworkProbe =
+			(nid is "fFxGkxF2bVo" or "oBr313PppNE") &&
+			resultValue == -1;
 		if (!expectedFileProbeMiss &&
 			!expectedVirtualQueryProbe &&
 			!expectedDirectMemoryQueryProbe &&
@@ -1611,7 +1614,8 @@ public sealed partial class DirectExecutionBackend
 			!expectedUserServiceNoEvent &&
 			!expectedPrivacyInvalidParameter &&
 			!expectedPlayGoChunkEnumerationEnd &&
-			!expectedSaveDataMemoryNotReady)
+			!expectedSaveDataMemoryNotReady &&
+			!expectedOfflineNetworkProbe)
 		{
 			return true;
 		}
@@ -2316,7 +2320,10 @@ public sealed partial class DirectExecutionBackend
 			"UnityRenderingExtEvent" or
 			"UnityRenderingExtQuery" or
 			"UnityShaderCompilerExtEvent" or
-			"UnitySetEventQueue";
+			"UnitySetEventQueue" or
+			"CreateH264Decoder" or
+			"CreateAACDecoder" or
+			"CreateMP3Decoder";
 
 	private bool TryResolveRuntimeSymbolAlias(string symbolName, out ulong address)
 	{
