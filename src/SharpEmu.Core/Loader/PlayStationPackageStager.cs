@@ -1,6 +1,7 @@
 // Copyright (C) 2026 SharpEmu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
@@ -35,7 +36,13 @@ public static class PlayStationPackageStager
                 out ebootPath,
                 out _))
         {
-            message = "Using an existing extracted application; no package key was required.";
+            if (!TryValidateDecryptedApplication(ebootPath, out message))
+            {
+                ebootPath = string.Empty;
+                return false;
+            }
+
+            message = "Using an existing extracted application; the application image is a valid decrypted ELF/fSELF.";
             return true;
         }
 
@@ -62,7 +69,13 @@ public static class PlayStationPackageStager
         if (Directory.Exists(outputDirectory) &&
             TryFindEboot(outputDirectory, out ebootPath))
         {
-            message = $"Using cached PKG staging directory: {outputDirectory}";
+            if (!TryValidateDecryptedApplication(ebootPath, out message))
+            {
+                ebootPath = string.Empty;
+                return false;
+            }
+
+            message = $"Using cached PKG staging directory: {outputDirectory}; the application image is a valid decrypted ELF/fSELF.";
             return true;
         }
 
@@ -125,8 +138,14 @@ public static class PlayStationPackageStager
 
             if (TryFindEboot(outputDirectory, out ebootPath))
             {
+                if (!TryValidateDecryptedApplication(ebootPath, out message))
+                {
+                    ebootPath = string.Empty;
+                    return false;
+                }
+
                 message =
-                    $"PKG staged successfully with {Path.GetFileName(tool)}; no user package key was required.";
+                    $"PKG staged successfully with {Path.GetFileName(tool)}; the application image is a valid decrypted ELF/fSELF.";
                 return true;
             }
 
@@ -144,6 +163,109 @@ public static class PlayStationPackageStager
         catch (Exception exception)
         {
             message = $"Unable to run PkgTool: {exception.Message}";
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Verifies that package processing produced an image that the normal
+    /// SharpEmu loader can recognize as a decrypted bare ELF or a SELF whose
+    /// embedded ELF header is readable. A PKG header alone is not sufficient.
+    /// </summary>
+    private static bool TryValidateDecryptedApplication(string ebootPath, out string message)
+    {
+        message = string.Empty;
+
+        try
+        {
+            using var stream = new FileStream(
+                ebootPath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                0x1000,
+                FileOptions.SequentialScan);
+
+            if (stream.Length < 64)
+            {
+                message = $"PKG produced '{ebootPath}', but the application image is too small to be a valid ELF.";
+                return false;
+            }
+
+            Span<byte> header = stackalloc byte[64];
+            var read = stream.Read(header);
+            if (read < header.Length)
+            {
+                message = $"PKG produced '{ebootPath}', but the application image header could not be read.";
+                return false;
+            }
+
+            var magic = BinaryPrimitives.ReadUInt32BigEndian(header[..4]);
+            var elfOffset = 0L;
+
+            if (magic == 0x7F454C46)
+            {
+                elfOffset = 0;
+            }
+            else if (magic is 0x4F153D1D or 0x5414F5EE)
+            {
+                const int selfHeaderSize = 0x20;
+                const int selfSegmentSize = 0x20;
+
+                var segmentCount = BinaryPrimitives.ReadUInt16LittleEndian(header.Slice(0x18, 2));
+                if (segmentCount == 0 || segmentCount > 0x4000)
+                {
+                    message = $"PKG produced '{ebootPath}', but its SELF segment table is invalid.";
+                    return false;
+                }
+
+                elfOffset = checked(selfHeaderSize + ((long)segmentCount * selfSegmentSize));
+                if (elfOffset < 0 || elfOffset > stream.Length - 64)
+                {
+                    message = $"PKG produced '{ebootPath}', but its embedded ELF is outside the image.";
+                    return false;
+                }
+            }
+            else
+            {
+                message =
+                    $"PKG produced '{ebootPath}', but the resulting image is still encrypted or " +
+                    "otherwise not a loadable decrypted ELF/fSELF.";
+                return false;
+            }
+
+            if (elfOffset != 0)
+            {
+                stream.Position = elfOffset;
+                if (stream.Read(header) < header.Length)
+                {
+                    message = $"PKG produced '{ebootPath}', but the embedded ELF header could not be read.";
+                    return false;
+                }
+            }
+
+            if (BinaryPrimitives.ReadUInt32BigEndian(header[..4]) != 0x7F454C46 ||
+                header[4] != 2 ||
+                header[5] != 1 ||
+                BinaryPrimitives.ReadUInt16LittleEndian(header.Slice(18, 2)) != 62 ||
+                BinaryPrimitives.ReadUInt16LittleEndian(header.Slice(54, 2)) != 56)
+            {
+                message =
+                    $"PKG produced '{ebootPath}', but its application image is not a valid decrypted " +
+                    "x86-64 ELF/fSELF.";
+                return false;
+            }
+
+            return true;
+        }
+        catch (Exception exception) when (
+            exception is IOException
+                or UnauthorizedAccessException
+                or InvalidDataException
+                or OverflowException
+                or ArgumentOutOfRangeException)
+        {
+            message = $"Could not validate the decrypted application image '{ebootPath}': {exception.Message}";
             return false;
         }
     }
