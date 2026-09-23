@@ -309,7 +309,6 @@ public sealed unsafe partial class DirectExecutionBackend
 		}
 		_posixXmmContextBridged = vectorRegisters != null;
 
-		exceptionRecoveredBadIndirectCall = false;
 		EXCEPTION_RECORD record = default;
 		record.ExceptionAddress = (void*)ReadCtxU64(contextRecord, CTX_RIP);
 		if (signal == PosixSigIll)
@@ -344,6 +343,23 @@ public sealed unsafe partial class DirectExecutionBackend
 			record.NumberParameters = 2;
 			record.ExceptionInformation[0] = accessType;
 			record.ExceptionInformation[1] = faultAddress;
+		}
+
+		if (exceptionRecoveredBadIndirectCall)
+		{
+			for (int i = 0; i < offsets.Length; i++)
+			{
+				*(ulong*)(registers + offsets[i]) = ReadCtxU64(contextRecord, CTX_RAX + i * 8);
+			}
+			if (vectorRegisters != null)
+			{
+				Buffer.MemoryCopy(
+					contextRecord + Win64ContextXmm0Offset,
+					vectorRegisters,
+					XmmBlockSize,
+					XmmBlockSize);
+			}
+			return true;
 		}
 
 		EXCEPTION_POINTERS pointers;
