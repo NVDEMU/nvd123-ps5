@@ -89,16 +89,6 @@ public static class KernelProcessCompatExports
         return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_OK);
     }
 
-    [SysAbiExport(
-        Nid = "959qrazPIrg",
-        ExportName = "sceKernelGetProcParam",
-        Target = Generation.Gen4,
-        LibraryName = "libKernel")]
-    public static int KernelGetProcParamCompat(CpuContext ctx)
-    {
-        return KernelRuntimeCompatExports.KernelGetProcParam(ctx);
-    }
-
     private static string NormalizeModulePath(string guestPath)
     {
         var normalized = guestPath.Replace('\', '/').Trim();
