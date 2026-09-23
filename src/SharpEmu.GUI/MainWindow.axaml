@@ -1099,6 +1099,12 @@ SPDX-License-Identifier: GPL-2.0-or-later
                                  Text="General" />
                     </Grid>
                   </Button>
+                  <Button x:Name="OptionsKeyboardNav" Classes="optionsNav">
+                    <Grid ColumnDefinitions="36,*">
+                      <TextBlock Grid.Column="0" Classes="materialSymbol optionsNavIcon" Text="keyboard" />
+                      <TextBlock x:Name="OptionsKeyboardNavLabel" Grid.Column="1" Classes="optionsNavLabel" Text="Keyboard" />
+                    </Grid>
+                  </Button>
                   <Button x:Name="OptionsLoggingNav" Classes="optionsNav">
                     <Grid ColumnDefinitions="36,*">
                       <TextBlock Grid.Column="0"
@@ -1184,6 +1190,66 @@ SPDX-License-Identifier: GPL-2.0-or-later
                         <ToggleSwitch x:Name="StrictToggle"
                                       Classes="optionToggle" />
                       </local:SettingRow>
+                    </StackPanel>
+                  </Border>
+                </StackPanel>
+              </ScrollViewer>
+
+              <ScrollViewer x:Name="OptionsKeyboardPanel" Classes="optionsSectionPanel">
+                <StackPanel>
+                  <Border Classes="optionsGroup">
+                    <StackPanel Spacing="8">
+                      <TextBlock Classes="optionsGroupHeader" Text="Keyboard Controls" />
+                      <TextBlock Classes="optionsDescription" Text="Click a key, then press the keyboard key you want to assign. Changes are saved automatically." TextWrapping="Wrap" />
+                      <local:SettingRow Classes="optionRow" Label="Up" Description="D-pad / left stick up">
+                        <Button x:Name="KeyUpButton" Classes="optionAction" Content="W" />
+                      </local:SettingRow>
+                      <local:SettingRow Classes="optionRow" Label="Down" Description="D-pad / left stick down">
+                        <Button x:Name="KeyDownButton" Classes="optionAction" Content="S" />
+                      </local:SettingRow>
+                      <local:SettingRow Classes="optionRow" Label="Left" Description="D-pad / left stick left">
+                        <Button x:Name="KeyLeftButton" Classes="optionAction" Content="A" />
+                      </local:SettingRow>
+                      <local:SettingRow Classes="optionRow" Label="Right" Description="D-pad / left stick right">
+                        <Button x:Name="KeyRightButton" Classes="optionAction" Content="D" />
+                      </local:SettingRow>
+                      <local:SettingRow Classes="optionRow" Label="Cross" Description="PS Cross">
+                        <Button x:Name="KeyCrossButton" Classes="optionAction" Content="Z" />
+                      </local:SettingRow>
+                      <local:SettingRow Classes="optionRow" Label="Circle" Description="PS Circle">
+                        <Button x:Name="KeyCircleButton" Classes="optionAction" Content="X" />
+                      </local:SettingRow>
+                      <local:SettingRow Classes="optionRow" Label="Square" Description="PS Square">
+                        <Button x:Name="KeySquareButton" Classes="optionAction" Content="C" />
+                      </local:SettingRow>
+                      <local:SettingRow Classes="optionRow" Label="Triangle" Description="PS Triangle">
+                        <Button x:Name="KeyTriangleButton" Classes="optionAction" Content="V" />
+                      </local:SettingRow>
+                      <local:SettingRow Classes="optionRow" Label="L1" Description="Left shoulder">
+                        <Button x:Name="KeyL1Button" Classes="optionAction" Content="Q" />
+                      </local:SettingRow>
+                      <local:SettingRow Classes="optionRow" Label="R1" Description="Right shoulder">
+                        <Button x:Name="KeyR1Button" Classes="optionAction" Content="E" />
+                      </local:SettingRow>
+                      <local:SettingRow Classes="optionRow" Label="L2" Description="Left trigger">
+                        <Button x:Name="KeyL2Button" Classes="optionAction" Content="R" />
+                      </local:SettingRow>
+                      <local:SettingRow Classes="optionRow" Label="R2" Description="Right trigger">
+                        <Button x:Name="KeyR2Button" Classes="optionAction" Content="F" />
+                      </local:SettingRow>
+                      <local:SettingRow Classes="optionRow" Label="L3" Description="Left stick click">
+                        <Button x:Name="KeyL3Button" Classes="optionAction" Content="Shift" />
+                      </local:SettingRow>
+                      <local:SettingRow Classes="optionRow" Label="R3" Description="Right stick click">
+                        <Button x:Name="KeyR3Button" Classes="optionAction" Content="Ctrl" />
+                      </local:SettingRow>
+                      <local:SettingRow Classes="optionRow" Label="Options" Description="PS Options / Start">
+                        <Button x:Name="KeyOptionsButton" Classes="optionAction" Content="Tab" />
+                      </local:SettingRow>
+                      <local:SettingRow Classes="optionRow" Label="Share" Description="PS Share">
+                        <Button x:Name="KeyShareButton" Classes="optionAction" Content="Space" />
+                      </local:SettingRow>
+                      <Button x:Name="ResetKeyboardBindingsButton" Classes="optionAction" HorizontalAlignment="Left" Content="Reset keyboard bindings" />
                     </StackPanel>
                   </Border>
                 </StackPanel>
