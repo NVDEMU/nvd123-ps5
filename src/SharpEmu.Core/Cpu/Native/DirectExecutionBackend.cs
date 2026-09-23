@@ -6831,7 +6831,11 @@ private const int DefaultImportLoopGuardSeconds = 0;
 			return nid is
 				"Op8TBGY5KHg" or // pthread_cond_wait
 				"27bAgiJmOh0" or // pthread_cond_timedwait
-				"fzyMKs9kim0";   // sceKernelWaitEqueue
+				"fzyMKs9kim0" or // sceKernelWaitEqueue
+				"Zxa0VhQVTsk" or // sceKernelWaitSema
+				"C36iRE0F5sE" or // scePthreadSemWait
+				"YCV5dGGBcCo" or // sem_wait
+				"w5IHyvahg-o";   // sem_timedwait
 		}
 
 		return false;
