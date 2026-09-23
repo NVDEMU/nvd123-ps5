@@ -318,17 +318,18 @@ internal static partial class Program
                 $"[PKG] Detected {(packageInfo.Format == PlayStationPackageFormat.Ps5Fih ? "PS5 FIH" : "PS4 CNT")} package" +
                 $" titleId={packageInfo.TitleId ?? "(unknown)"} contentId={packageInfo.ContentId ?? "(unknown)"}");
 
-            if (PlayStationPackage.TryResolveExtractedApplication(ebootPath, out var resolvedEboot, out _))
+            if (PlayStationPackageStager.TryStageApplication(
+                    ebootPath,
+                    out var stagedEboot,
+                    out var stagingMessage))
             {
-                Console.Error.WriteLine($"[PKG] Using extracted application: {resolvedEboot}");
-                ebootPath = resolvedEboot;
+                Console.Error.WriteLine($"[PKG] {stagingMessage}");
+                Console.Error.WriteLine($"[PKG] Using application: {stagedEboot}");
+                ebootPath = stagedEboot;
             }
             else
             {
-                Log.Error(
-                    "The PKG was recognized, but no extracted app0/eboot.bin was found next to it. " +
-                    "SharpEmu's execution core currently consumes decrypted ELF/SELF images; " +
-                    "direct PS4/PS5 PKG extraction is the next package-backend layer.");
+                Log.Error($"[PKG] {stagingMessage}");
                 return 2;
             }
         }
