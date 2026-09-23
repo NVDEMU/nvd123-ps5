@@ -164,7 +164,7 @@ public static partial class Gen5MslTranslator
                 Line($"if ({bounds})");
                 Line("{");
                 _indent++;
-                Line($"{texture}.write({VectorLiteral(kind)}({components[0]}, {components[1]}, {components[2]}, {components[3]}), {coordinate});")
+                Line($"{texture}.write({VectorLiteral(kind)}({components[0]}, {components[1]}, {components[2]}, {components[3]}), {coordinate});");
 
                 _indent--;
                 Line("}");
@@ -275,12 +275,6 @@ public static partial class Gen5MslTranslator
         {
             sampled = string.Empty;
             error = string.Empty;
-            if (dimension == ImageDimension.Dim3D)
-            {
-                error = "3D image gather is not supported on Metal";
-                return false;
-            }
-
             var opcode = instruction.Opcode;
             var hasOffset = opcode.EndsWith("O", StringComparison.Ordinal);
             var hasCompare = opcode.Contains("SampleC", StringComparison.Ordinal);
@@ -459,6 +453,12 @@ public static partial class Gen5MslTranslator
                 2 => "z",
                 _ => "w",
             };
+            if (dimension == ImageDimension.Dim3D)
+            {
+                error = "3D image gather is not supported on Metal";
+                return false;
+            }
+
             sampled = Temp(
                 $"vec<{kind}, 4>",
                 $"{texture}.gather({samplerName}, {coordinates}, {offset}, component::{componentName})");
