@@ -450,6 +450,18 @@ internal static partial class Program
             }
             catch (Exception ex)
             {
+                Console.Error.WriteLine($"[RUNTIME][EXCEPTION] Type: {ex.GetType().FullName}");
+                Console.Error.WriteLine($"[RUNTIME][EXCEPTION] Message: {ex.Message}");
+                Console.Error.WriteLine($"[RUNTIME][EXCEPTION] Path: {ebootPath}");
+                Console.Error.WriteLine($"[RUNTIME][EXCEPTION] Stack: {ex.StackTrace}");
+                if (runtime.LastExecutionDiagnostics is { Length: > 0 } diagnostics)
+                {
+                    Console.Error.WriteLine($"[RUNTIME][DIAGNOSTICS] {diagnostics}");
+                }
+                if (runtime.LastMilestoneLog is { Length: > 0 } milestones)
+                {
+                    Console.Error.WriteLine($"[RUNTIME][MILESTONES] {milestones}");
+                }
                 Console.Error.WriteLine($"[DEBUG] Exception: {ex}");
                 Log.Error("SharpEmu failed to run.", ex);
                 return 3;
