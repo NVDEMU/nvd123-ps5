@@ -222,6 +222,7 @@ public static class PlayStationPackageStager
                 // A retail encrypted/compressed SELF is not considered decrypted
                 // merely because its embedded ELF header is visible. Reject any
                 // blocked segment still carrying the encryption/compression flags.
+                var segmentHeader = new byte[8];
                 for (var i = 0; i < segmentCount; i++)
                 {
                     var segmentOffset = selfHeaderSize + (i * selfSegmentSize);
@@ -230,8 +231,7 @@ public static class PlayStationPackageStager
                         // The segment table extends beyond the first header read;
                         // read each descriptor directly from the stream below.
                         stream.Position = segmentOffset;
-                        Span<byte> segmentHeader = stackalloc byte[8];
-                        if (stream.Read(segmentHeader) < segmentHeader.Length)
+                        if (stream.Read(segmentHeader, 0, segmentHeader.Length) < segmentHeader.Length)
                         {
                             message = $"PKG produced '{ebootPath}', but the SELF segment table is truncated.";
                             return false;
