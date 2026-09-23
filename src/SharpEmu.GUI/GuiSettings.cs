@@ -146,7 +146,7 @@ public sealed class GuiSettings
         settings.DefaultProfile = NormalizeDefaultProfile(
             legacyProfile is { Length: 2 } ? legacyProfile[1] : settings.DefaultProfile);
         settings.DiscordClientId ??= "1525606762248540221";
-        settings.UpdateChannel = NormalizeChoice(settings.UpdateChannel, "Stable", "Nightly");
+        settings.UpdateChannel = NormalizeChoice(settings.UpdateChannel, "Nightly", "Stable", "Nightly");
         settings.LibraryLayout = NormalizeChoice(settings.LibraryLayout, "Carousel", "Grid");
         settings.WindowMode = NormalizeChoice(settings.WindowMode, "Windowed", "Borderless", "Exclusive");
         settings.Resolution = NormalizeResolution(settings.Resolution);
