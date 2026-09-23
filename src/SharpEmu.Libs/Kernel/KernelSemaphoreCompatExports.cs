@@ -254,7 +254,17 @@ public static class KernelSemaphoreCompatExports
                     return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_TIMED_OUT);
                 }
 
-                Monitor.Wait(semaphore.Gate, (int)Math.Min(remaining, 100));
+                // The primary guest entry is not represented by a cooperative
+                // GuestThreadExecution handle, so it historically fell through
+                // to this host-thread wait. Pump runnable guest workers before
+                // sleeping: startup barriers can be satisfied by a worker that
+                // has already been queued, while the semaphore still retains
+                // its normal count/wake semantics.
+                GuestThreadExecution.Scheduler?.Pump(ctx, "sema-host-wait");
+                var waitMilliseconds = timeoutAddress == 0
+                    ? 10
+                    : (int)Math.Min(Math.Max(1L, remaining), 10L);
+                Monitor.Wait(semaphore.Gate, waitMilliseconds);
             }
 
             semaphore.Count -= needCount;
