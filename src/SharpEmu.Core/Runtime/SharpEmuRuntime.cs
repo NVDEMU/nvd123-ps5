@@ -175,7 +175,9 @@ public sealed class SharpEmuRuntime : ISharpEmuRuntime
 
         HleDataSymbols.ConfigureProcessImageName(processImageName);
         MergeKnownHleDataSymbols(activeRuntimeSymbols);
-        var loadedModuleImages = LoadAdjacentSceModules(ebootPath, image, activeImportStubs, activeRuntimeSymbols);
+        var loadedModuleImages = LoadFirmwareModules(image, activeImportStubs, activeRuntimeSymbols);
+        loadedModuleImages.AddRange(
+            LoadAdjacentSceModules(ebootPath, image, activeImportStubs, activeRuntimeSymbols));
         RebindImportedDataSymbols(image, loadedModuleImages, activeRuntimeSymbols);
         var app0Root = Path.GetDirectoryName(normalizedEbootPath) ?? string.Empty;
         KernelModuleRegistry.ConfigureModuleLoader(modulePath => LoadRequestedAppModule(
@@ -654,6 +656,117 @@ public sealed class SharpEmuRuntime : ISharpEmuRuntime
         }
 
         return null;
+    }
+
+    
+    private List<LoadedModuleImage> LoadFirmwareModules(
+        SelfImage mainImage,
+        IDictionary<ulong, string> importStubs,
+        IDictionary<string, ulong> runtimeSymbols)
+    {
+        var loadedImages = new List<LoadedModuleImage>();
+        if (mainImage.ElfHeader.AbiVersion != 1)
+        {
+            return loadedImages;
+        }
+
+        var root = PlayStationFirmwareManager.DefaultDirectory;
+        if (!Directory.Exists(root))
+        {
+            Console.Error.WriteLine($"[RUNTIME][FIRMWARE] sys_modules directory not found: {root}");
+            return loadedImages;
+        }
+
+        var searchDirectories = new List<string> { root };
+        if (!string.IsNullOrWhiteSpace(mainImage.TitleId))
+        {
+            var perGame = Path.Combine(root, mainImage.TitleId);
+            if (Directory.Exists(perGame))
+            {
+                searchDirectories.Insert(0, perGame);
+            }
+        }
+
+        var modulePaths = searchDirectories
+            .SelectMany(directory => Directory.EnumerateFiles(
+                directory, "*.sprx", SearchOption.TopDirectoryOnly))
+            .Where(path => Path.GetFileName(path).StartsWith(
+                "libSce", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (modulePaths.Length == 0)
+        {
+            Console.Error.WriteLine($"[RUNTIME][FIRMWARE] No user-owned PS4 SPRX modules found in {root}");
+            return loadedImages;
+        }
+
+        Console.Error.WriteLine(
+            $"[RUNTIME][FIRMWARE] Loading {modulePaths.Length} user-owned PS4 SPRX module(s) from sys_modules.");
+
+        var loaded = 0;
+        var failed = 0;
+        foreach (var modulePath in modulePaths)
+        {
+            try
+            {
+                var fileInfo = new FileInfo(modulePath);
+                if (!fileInfo.Exists || fileInfo.Length <= 0 || fileInfo.Length > int.MaxValue)
+                {
+                    failed++;
+                    Console.Error.WriteLine(
+                        $"[RUNTIME][FIRMWARE] Skipping invalid module size: {modulePath}");
+                    continue;
+                }
+
+                var moduleBytes = GC.AllocateUninitializedArray<byte>((int)fileInfo.Length);
+                using (var stream = File.OpenRead(modulePath))
+                {
+                    stream.ReadExactly(moduleBytes);
+                }
+
+                var moduleImage = _selfLoader.LoadAdditional(
+                    moduleBytes.AsSpan(),
+                    _virtualMemory,
+                    _moduleManager,
+                    _fileSystem,
+                    Path.GetDirectoryName(modulePath));
+
+                _ = MergeImportStubs(importStubs, moduleImage.ImportStubs, modulePath);
+                _ = MergeRuntimeSymbols(runtimeSymbols, moduleImage.RuntimeSymbols);
+
+                var handle = RegisterLoadedModule(
+                    modulePath,
+                    moduleImage,
+                    isMain: false,
+                    isSystemModule: true);
+
+                loadedImages.Add(new LoadedModuleImage(
+                    modulePath,
+                    moduleImage,
+                    handle,
+                    StartAtBoot: true));
+
+                loaded++;
+                Console.Error.WriteLine(
+                    $"[RUNTIME][FIRMWARE] Loaded {Path.GetFileName(modulePath)}: " +
+                    $"entry=0x{moduleImage.EntryPoint:X16}, imports={moduleImage.ImportStubs.Count}, " +
+                    $"symbols={moduleImage.RuntimeSymbols.Count}");
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                Console.Error.WriteLine(
+                    $"[RUNTIME][FIRMWARE] Failed to load {modulePath}: " +
+                    $"{ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        Console.Error.WriteLine(
+            $"[RUNTIME][FIRMWARE] Firmware module summary: loaded={loaded}, failed={failed}");
+
+        return loadedImages;
     }
 
     private List<LoadedModuleImage> LoadAdjacentSceModules(
