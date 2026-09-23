@@ -1527,7 +1527,9 @@ public sealed partial class DirectExecutionBackend
 		ulong r9) =>
 		rdi == 0 &&
 		rsi != 0 &&
-		rdx is 0x000144CA00000000UL or 0x0001469800000000UL &&
+		// Retail/runtime revisions observed in New Joe & Mac use several descriptor tags here.
+		// Keep this compatibility path limited to known ABI variants instead of treating every call as optional.
+		rdx is 0x000144CA00000000UL or 0x0001469800000000UL or 0x0001681800000000UL &&
 		rcx == 1 &&
 		r8 != 0 &&
 		r9 != 0;
