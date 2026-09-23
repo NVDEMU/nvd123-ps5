@@ -164,7 +164,10 @@ public sealed class SharpEmuRuntime : ISharpEmuRuntime
         _ = RegisterLoadedModule(normalizedEbootPath, image, isMain: true, isSystemModule: false);
         KernelRuntimeCompatExports.ConfigureProcessProcParamAddress(image.ProcParamAddress);
         Console.Error.WriteLine($"[RUNTIME] Entry: 0x{image.EntryPoint:X16}");
-        var generation = image.ElfHeader.AbiVersion == 2 ? Generation.Gen5 : Generation.Gen4;
+        var generation = image.ElfHeader.IsPs5 ? Generation.Gen5 : Generation.Gen4;
+        Console.Error.WriteLine(
+            $"[RUNTIME] Detected platform: {(image.ElfHeader.IsPs5 ? "PS5" : image.ElfHeader.IsPs4 ? "PS4" : "PS4-compatible/unknown Gen4")} " +
+            $"(OSABI={image.ElfHeader.Abi}, ABIVERSION={image.ElfHeader.AbiVersion})");
         var activeImportStubs = new Dictionary<ulong, string>(image.ImportStubs);
         var activeRuntimeSymbols = new Dictionary<string, ulong>(image.RuntimeSymbols, StringComparer.Ordinal);
         var processImageName = Path.GetFileName(ebootPath);
@@ -665,7 +668,7 @@ public sealed class SharpEmuRuntime : ISharpEmuRuntime
         IDictionary<string, ulong> runtimeSymbols)
     {
         var loadedImages = new List<LoadedModuleImage>();
-        if (mainImage.ElfHeader.AbiVersion != 1)
+        if (!mainImage.ElfHeader.IsPs4)
         {
             return loadedImages;
         }
