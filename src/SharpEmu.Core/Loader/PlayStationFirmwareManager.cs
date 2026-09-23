@@ -56,11 +56,13 @@ public static class PlayStationFirmwareManager
             {
                 foreach (var file in Directory.EnumerateFiles(source, "*.sprx", SearchOption.AllDirectories))
                 {
-                    if (InstallFile(file, out var wasInstalled))
-                    {
-                        if (wasInstalled) installed++;
-                        else skipped++;
-                    }
+                    if (!InstallFile(file, out var alreadyInstalled))
+                        continue;
+
+                    if (alreadyInstalled)
+                        skipped++;
+                    else
+                        installed++;
                 }
             }
             else if (string.Equals(Path.GetExtension(source), ".zip", StringComparison.OrdinalIgnoreCase))
@@ -72,7 +74,7 @@ public static class PlayStationFirmwareManager
                         continue;
 
                     var fileName = Path.GetFileName(entry.FullName);
-                    if (string.IsNullOrWhiteSpace(fileName))
+                    if (!IsKnownModuleName(fileName))
                         continue;
 
                     var destination = Path.Combine(DefaultDirectory, fileName);
@@ -83,15 +85,23 @@ public static class PlayStationFirmwareManager
                     }
 
                     entry.ExtractToFile(destination);
+                    if (!IsElfModule(destination))
+                    {
+                        File.Delete(destination);
+                        continue;
+                    }
+
                     installed++;
                 }
             }
             else if (string.Equals(Path.GetExtension(source), ".sprx", StringComparison.OrdinalIgnoreCase))
             {
-                if (InstallFile(source, out var wasInstalled))
+                if (InstallFile(source, out var alreadyInstalled))
                 {
-                    if (wasInstalled) installed++;
-                    else skipped++;
+                    if (alreadyInstalled)
+                        skipped++;
+                    else
+                        installed++;
                 }
             }
             else
@@ -112,27 +122,50 @@ public static class PlayStationFirmwareManager
         }
     }
 
-    private static bool InstallFile(string source, out bool wasInstalled)
+    private static bool InstallFile(string source, out bool alreadyInstalled)
     {
-        wasInstalled = false;
+        alreadyInstalled = false;
         var fileName = Path.GetFileName(source);
 
-        if (string.IsNullOrWhiteSpace(fileName) ||
-            !fileName.EndsWith(".sprx", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        if (!KnownModulePrefixes.Any(prefix =>
-                fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+        if (!IsKnownModuleName(fileName) || !IsElfModule(source))
             return false;
 
         var destination = Path.Combine(DefaultDirectory, fileName);
         if (File.Exists(destination))
         {
-            wasInstalled = true;
+            alreadyInstalled = true;
             return true;
         }
 
         File.Copy(source, destination);
         return true;
+    }
+
+    private static bool IsKnownModuleName(string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName) ||
+            !fileName.EndsWith(".sprx", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return KnownModulePrefixes.Any(prefix =>
+            fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsElfModule(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            Span<byte> magic = stackalloc byte[4];
+            return stream.Read(magic) == 4 &&
+                   magic[0] == 0x7F &&
+                   magic[1] == (byte)'E' &&
+                   magic[2] == (byte)'L' &&
+                   magic[3] == (byte)'F';
+        }
+        catch
+        {
+            return false;
+        }
     }
 }
