@@ -3,6 +3,7 @@
 
 using System.Text;
 using SharpEmu.ShaderCompiler;
+using SharpEmu.ShaderCompiler.Resources;
 
 namespace SharpEmu.ShaderCompiler.Metal;
 
