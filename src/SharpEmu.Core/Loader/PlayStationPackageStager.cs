@@ -113,7 +113,7 @@ public static class PlayStationPackageStager
             {
                 if (LooksLikeKeyFailure(diagnostic))
                 {
-                    return ExplainKeyRequirement(diagnostic);
+                    message = ExplainKeyRequirement(diagnostic); return false;
                 }
 
                 message =
@@ -157,7 +157,7 @@ public static class PlayStationPackageStager
                text.Contains("passcode");
     }
 
-    private static bool ExplainKeyRequirement(string diagnostic)
+    private static string ExplainKeyRequirement(string diagnostic)
     {
         var keyPath = Environment.GetEnvironmentVariable("NVDEMU_PKG_KEYS");
         if (string.IsNullOrWhiteSpace(keyPath))
@@ -165,29 +165,16 @@ public static class PlayStationPackageStager
 
         if (!PlayStationPackageKeyStore.TryLoad(keyPath, out var keys, out var keyMessage))
         {
-            _lastMessage =
-                $"[PKG][KEYS] The PKG backend reports protected/encrypted content. " +
-                $"{keyMessage} Expected file: {keyPath}. " +
-                "Use --create-pkg-key-file to create the user-owned template.";
-            return false;
+            return $"[PKG][KEYS] The PKG backend reports protected/encrypted content. {keyMessage} Expected file: {keyPath}. Use --create-pkg-key-file to create the user-owned template.";
         }
 
         if (keys.Count == 0)
         {
-            _lastMessage =
-                $"[PKG][KEYS] The PKG backend reports protected/encrypted content, " +
-                $"but '{keyPath}' contains no keys. Add only authorized key material and retry.";
-            return false;
+            return $"[PKG][KEYS] The PKG backend reports protected/encrypted content, but '{keyPath}' contains no keys. Add only authorized key material and retry.";
         }
 
-        _lastMessage =
-            $"[PKG][KEYS] The PKG backend reports protected/encrypted content and " +
-            $"NVDEMU loaded {keys.Count} user-supplied key(s) from '{keyPath}'. " +
-            "The configured backend must support those keys; NVDEMU does not bundle platform private keys.";
-        return false;
+        return $"[PKG][KEYS] The PKG backend reports protected/encrypted content and NVDEMU loaded {keys.Count} user-supplied key(s) from '{keyPath}'. The configured backend must support those keys; NVDEMU does not bundle platform private keys.";
     }
-
-    private static string _lastMessage = string.Empty;
 
     private static string? FindPkgTool()
     {
