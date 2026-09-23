@@ -591,6 +591,109 @@ public static class AjmExports
         return ctx.SetReturn(0);
     }
 
+    /// <summary>
+    /// Applies control operations to an existing AJM decoder and records the
+    /// operation in the guest batch. This mirrors the retail control path for
+    /// reset/initialize without requiring a separate asynchronous audio worker.
+    /// </summary>
+    [SysAbiExport(
+        Nid = "7FZsbyVRM4U",
+        ExportName = "sceAjmBatchJobControl",
+        Target = Generation.Gen4 | Generation.Gen5,
+        LibraryName = "libSceAjm")]
+    public static int AjmBatchJobControl(CpuContext ctx)
+    {
+        var infoAddress = ctx[CpuRegister.Rdi];
+        var instanceId = unchecked((uint)ctx[CpuRegister.Rsi]);
+        var flags = ctx[CpuRegister.Rdx];
+        var sidebandInput = ctx[CpuRegister.Rcx];
+        var sidebandInputSize = ctx[CpuRegister.R8];
+        var sidebandOutput = ctx[CpuRegister.R9];
+        var sidebandOutputSize = ReadStackArg64(ctx, 0);
+
+        if (!TryAppendBatchJob(ctx, infoAddress, AjmJobControlSize))
+        {
+            return ctx.SetReturn(OrbisAjmErrorJobCreation);
+        }
+
+        var status = Atrac9DecodeState.ResultInvalidParameter;
+        if (TryGetInstance(instanceId, out var instance))
+        {
+            status = 0;
+
+            // Control flags match the published AJM layout: reset at bit 13,
+            // initialize at bit 14. For initialization, the sideband input is
+            // the codec configuration blob; for reset no input is required.
+            const ulong controlReset = 1UL << 13;
+            const ulong controlInitialize = 1UL << 14;
+            const ulong sidebandGapless = 1UL << 45;
+            if ((flags & sidebandGapless) != 0)
+            {
+                if (sidebandInput == 0 || sidebandInputSize < 16)
+                {
+                    status = Atrac9DecodeState.ResultInvalidParameter;
+                }
+                else if (instance.Atrac9 is not null &&
+                         ctx.Memory.TryRead(sidebandInput, stackalloc byte[16]))
+                {
+                    // Gapless state is not externally exposed yet; acknowledging
+                    // the sideband is preferable to corrupting the guest buffer.
+                }
+            }
+
+            if ((flags & controlReset) != 0)
+            {
+                instance.Atrac9?.Reset();
+            }
+
+            if ((flags & controlInitialize) != 0 &&
+                instance.Atrac9 is not null)
+            {
+                if (sidebandInput == 0 || sidebandInputSize < 4)
+                {
+                    status = Atrac9DecodeState.ResultInvalidParameter;
+                }
+                else
+                {
+                    Span<byte> configData = stackalloc byte[4];
+                    if (!ctx.Memory.TryRead(sidebandInput, configData) ||
+                        !instance.Atrac9.TryInitialize(configData))
+                    {
+                        status = Atrac9DecodeState.ResultInvalidParameter;
+                    }
+                }
+            }
+        }
+
+        // The control result is a normal AJM sideband result header. The current
+        // decoder can expose a valid status even when no output sideband was
+        // requested, and zero-filling prevents stale guest data from leaking.
+        if (sidebandOutput != 0 && sidebandOutputSize != 0)
+        {
+            var clearLength = Math.Min(sidebandOutputSize, 0x1000UL);
+            var clear = new byte[checked((int)clearLength)];
+            if (!ctx.Memory.TryWrite(sidebandOutput, clear))
+            {
+                status = Atrac9DecodeState.ResultInvalidParameter;
+            }
+
+            if (clear.Length >= 4)
+            {
+                BinaryPrimitives.WriteInt32LittleEndian(clear, status);
+                if (!ctx.Memory.TryWrite(sidebandOutput, clear))
+                {
+                    status = Atrac9DecodeState.ResultInvalidParameter;
+                }
+            }
+        }
+
+        Trace(
+            $"batch_job_control instance=0x{instanceId:X8} flags=0x{flags:X16} " +
+            $"input=0x{sidebandInput:X16}+0x{sidebandInputSize:X} " +
+            $"output=0x{sidebandOutput:X16}+0x{sidebandOutputSize:X} status=0x{status:X8}");
+        return ctx.SetReturn(0);
+    }
+
     [SysAbiExport(
         Nid = "3cAg7xN995U",
         ExportName = "sceAjmBatchJobGetStatistics",
