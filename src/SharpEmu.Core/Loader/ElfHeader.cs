@@ -48,6 +48,16 @@ public readonly struct ElfHeader
 
     public byte AbiVersion => _ident8;
 
+    /// <summary>
+    /// PS4 retail/developer ELF images use the FreeBSD/SCE ABI marker with
+    /// ABI version 0; PS5 images use ABI version 2 in the current loader.
+    /// Keep this check tied to both fields so ordinary Linux ELF files are not
+    /// accidentally classified as PS4.
+    /// </summary>
+    public bool IsPs4 => Abi == 9 && AbiVersion == 0;
+
+    public bool IsPs5 => AbiVersion == 2;
+
     public ushort Type => _type;
 
     public ushort Machine => _machine;
