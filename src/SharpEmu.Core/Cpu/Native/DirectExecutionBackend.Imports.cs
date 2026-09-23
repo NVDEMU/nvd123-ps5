@@ -161,6 +161,23 @@ public sealed partial class DirectExecutionBackend
 		}
 
 		var name = symbol.ExportName;
+
+		// PS4 GNM is the graphics ABI used by retail games. NVDEMU's renderer
+		// already has a guest command-stream submission path behind AGC, so route
+		// the PS4 DCB/CCB entry points into that same renderer instead of dropping
+		// every GNM call into a zero-return stub.
+		if (name is
+			"sceGnmSubmitCommandBuffers" or
+			"sceGnmSubmitCommandBuffersForWorkload" or
+			"sceGnmSubmitAndFlipCommandBuffers" or
+			"sceGnmSubmitAndFlipCommandBuffersForWorkload" or
+			"sceGnmSubmitDone")
+		{
+			var gnmResult = DispatchPs4GnmImport(name, cpuContext);
+			result = (OrbisGen2Result)gnmResult;
+			return true;
+		}
+
 		var shouldSucceed = true;
 		ulong returnValue = 0;
 
@@ -240,6 +257,82 @@ public sealed partial class DirectExecutionBackend
 				$"[PS4][HLE-FALLBACK] {name} ({importStubEntry.Nid}) -> 0x{returnValue:X16}");
 		}
 		return true;
+	}
+
+	private static int DispatchPs4GnmImport(string name, CpuContext ctx)
+	{
+		if (name == "sceGnmSubmitDone")
+		{
+			return SharpEmu.Libs.Agc.AgcExports.SubmitPs4GnmDone(ctx);
+		}
+
+		if (name == "sceGnmSubmitCommandBuffers")
+		{
+			return SharpEmu.Libs.Agc.AgcExports.SubmitPs4GnmCommandBuffers(
+				ctx,
+				unchecked((uint)ctx[CpuRegister.Rdi]),
+				ctx[CpuRegister.Rsi],
+				ctx[CpuRegister.Rdx],
+				ctx[CpuRegister.Rcx],
+				ctx[CpuRegister.R8]);
+		}
+
+		if (name == "sceGnmSubmitCommandBuffersForWorkload")
+		{
+			return SharpEmu.Libs.Agc.AgcExports.SubmitPs4GnmCommandBuffers(
+				ctx,
+				unchecked((uint)ctx[CpuRegister.Rsi]),
+				ctx[CpuRegister.Rdx],
+				ctx[CpuRegister.Rcx],
+				ctx[CpuRegister.R8],
+				ctx[CpuRegister.R9]);
+		}
+
+		if (name == "sceGnmSubmitAndFlipCommandBuffers")
+		{
+			if (!ctx.TryReadUInt64(ctx.Rsp + 0x08, out var bufferIndex) ||
+				!ctx.TryReadUInt64(ctx.Rsp + 0x10, out var flipMode) ||
+				!ctx.TryReadUInt64(ctx.Rsp + 0x18, out var flipArgument))
+			{
+				ctx[CpuRegister.Rax] = unchecked((ulong)(int)OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT);
+				return (int)OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT;
+			}
+
+			return SharpEmu.Libs.Agc.AgcExports.SubmitPs4GnmAndFlip(
+				ctx,
+				unchecked((uint)ctx[CpuRegister.Rdi]),
+				ctx[CpuRegister.Rsi],
+				ctx[CpuRegister.Rdx],
+				ctx[CpuRegister.Rcx],
+				ctx[CpuRegister.R8],
+				ctx[CpuRegister.R9],
+				unchecked((int)bufferIndex),
+				unchecked((int)flipMode),
+				unchecked((long)flipArgument));
+		}
+
+		// Workload variant has one extra leading argument, shifting the flip
+		// parameters onto stack slots 0..3 after the six register arguments.
+		if (!ctx.TryReadUInt64(ctx.Rsp + 0x08, out var workloadVideoOutHandle) ||
+			!ctx.TryReadUInt64(ctx.Rsp + 0x10, out var workloadBufferIndex) ||
+			!ctx.TryReadUInt64(ctx.Rsp + 0x18, out var workloadFlipMode) ||
+			!ctx.TryReadUInt64(ctx.Rsp + 0x20, out var workloadFlipArgument))
+		{
+			ctx[CpuRegister.Rax] = unchecked((ulong)(int)OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT);
+			return (int)OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT;
+		}
+
+		return SharpEmu.Libs.Agc.AgcExports.SubmitPs4GnmAndFlip(
+			ctx,
+			unchecked((uint)ctx[CpuRegister.Rsi]),
+			ctx[CpuRegister.Rdx],
+			ctx[CpuRegister.Rcx],
+			ctx[CpuRegister.R8],
+			ctx[CpuRegister.R9],
+			unchecked((int)workloadVideoOutHandle),
+			unchecked((int)workloadBufferIndex),
+			unchecked((int)workloadFlipMode),
+			unchecked((long)workloadFlipArgument));
 	}
 
 	private unsafe ulong DispatchImport(int importIndex, nint argPackPtr)
