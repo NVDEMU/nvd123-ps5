@@ -322,6 +322,7 @@ public partial class MainWindow : Window
         DefaultProfileBox.TextChanged += (_, _) =>
             _settings.DefaultProfile = GuiSettings.NormalizeDefaultProfile(DefaultProfileBox.Text);
         LanguageBox.SelectionChanged += (_, _) => OnLanguageChanged();
+        WireKeyboardBindings();
 
         GameList.AddHandler(ContextRequestedEvent, OnGameContextRequested, RoutingStrategies.Tunnel);
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
@@ -555,6 +556,7 @@ public partial class MainWindow : Window
     private Button[] OptionsNavigationButtons() =>
     [
         OptionsGeneralNav,
+        OptionsKeyboardNav,
         OptionsLoggingNav,
         OptionsLauncherNav,
         OptionsRenderingNav,
@@ -565,6 +567,7 @@ public partial class MainWindow : Window
     private Control[] OptionsSectionPanels() =>
     [
         OptionsGeneralPanel,
+        OptionsKeyboardPanel,
         OptionsLoggingPanel,
         OptionsLauncherPanel,
         OptionsRenderingPanel,
@@ -976,6 +979,10 @@ public partial class MainWindow : Window
             OptionsGeneralNavLabel,
             localization.Get("Options.General"));
         SetOptionsNavigationLabel(
+            OptionsKeyboardNav,
+            OptionsKeyboardNavLabel,
+            "Keyboard");
+        SetOptionsNavigationLabel(
             OptionsLoggingNav,
             OptionsLoggingNavLabel,
             localization.Get("Options.Section.Logging"));
@@ -995,6 +1002,110 @@ public partial class MainWindow : Window
             OptionsAboutNav,
             OptionsAboutNavLabel,
             localization.Get("Options.About"));
+    }
+
+    private static readonly (string Action, Button Button)[] KeyboardBindingControls =
+    [
+        (KeyboardBindings.Up, null!),
+        (KeyboardBindings.Down, null!),
+        (KeyboardBindings.Left, null!),
+        (KeyboardBindings.Right, null!),
+        (KeyboardBindings.Cross, null!),
+        (KeyboardBindings.Circle, null!),
+        (KeyboardBindings.Square, null!),
+        (KeyboardBindings.Triangle, null!),
+        (KeyboardBindings.L1, null!),
+        (KeyboardBindings.R1, null!),
+        (KeyboardBindings.L2, null!),
+        (KeyboardBindings.R2, null!),
+        (KeyboardBindings.L3, null!),
+        (KeyboardBindings.R3, null!),
+        (KeyboardBindings.Options, null!),
+        (KeyboardBindings.Share, null!),
+    ];
+
+    private void WireKeyboardBindings()
+    {
+        var controls = new (string Action, Button Button)[]
+        {
+            (KeyboardBindings.Up, KeyUpButton),
+            (KeyboardBindings.Down, KeyDownButton),
+            (KeyboardBindings.Left, KeyLeftButton),
+            (KeyboardBindings.Right, KeyRightButton),
+            (KeyboardBindings.Cross, KeyCrossButton),
+            (KeyboardBindings.Circle, KeyCircleButton),
+            (KeyboardBindings.Square, KeySquareButton),
+            (KeyboardBindings.Triangle, KeyTriangleButton),
+            (KeyboardBindings.L1, KeyL1Button),
+            (KeyboardBindings.R1, KeyR1Button),
+            (KeyboardBindings.L2, KeyL2Button),
+            (KeyboardBindings.R2, KeyR2Button),
+            (KeyboardBindings.L3, KeyL3Button),
+            (KeyboardBindings.R3, KeyR3Button),
+            (KeyboardBindings.Options, KeyOptionsButton),
+            (KeyboardBindings.Share, KeyShareButton),
+        };
+
+        foreach (var (action, button) in controls)
+        {
+            button.Content = FormatKeyboardKey(KeyboardBindings.Get(action));
+            button.KeyDown += (_, e) =>
+            {
+                if (TryGetVirtualKey(e.Key, out var virtualKey))
+                {
+                    KeyboardBindings.Set(action, virtualKey);
+                    button.Content = FormatKeyboardKey(virtualKey);
+                    e.Handled = true;
+                }
+            };
+        }
+
+        ResetKeyboardBindingsButton.Click += (_, _) =>
+        {
+            KeyboardBindings.Reset();
+            foreach (var (action, button) in controls)
+            {
+                button.Content = FormatKeyboardKey(KeyboardBindings.Get(action));
+            }
+        };
+    }
+
+    private static string FormatKeyboardKey(int virtualKey) => virtualKey switch
+    {
+        0x08 => "Backspace",
+        0x09 => "Tab",
+        0x0D => "Enter",
+        0x10 => "Shift",
+        0x11 => "Ctrl",
+        0x1B => "Esc",
+        0x20 => "Space",
+        0x25 => "Left",
+        0x26 => "Up",
+        0x27 => "Right",
+        0x28 => "Down",
+        >= 0x41 and <= 0x5A => ((char)virtualKey).ToString(),
+        _ => $"VK {virtualKey:X2}",
+    };
+
+    private static bool TryGetVirtualKey(Key key, out int virtualKey)
+    {
+        virtualKey = key switch
+        {
+            Key.Back => 0x08,
+            Key.Tab => 0x09,
+            Key.Enter => 0x0D,
+            Key.LeftShift or Key.RightShift => 0x10,
+            Key.LeftCtrl or Key.RightCtrl => 0x11,
+            Key.Escape => 0x1B,
+            Key.Space => 0x20,
+            Key.Left => 0x25,
+            Key.Up => 0x26,
+            Key.Right => 0x27,
+            Key.Down => 0x28,
+            >= Key.A and <= Key.Z => 0x41 + ((int)key - (int)Key.A),
+            _ => 0,
+        };
+        return virtualKey != 0;
     }
 
     private static void SetOptionsNavigationLabel(Button button, TextBlock label, string value)
