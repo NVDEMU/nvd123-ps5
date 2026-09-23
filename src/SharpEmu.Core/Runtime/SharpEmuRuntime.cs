@@ -664,16 +664,16 @@ public sealed class SharpEmuRuntime : ISharpEmuRuntime
     
     private static int Ps4ModuleBootPriority(string path)
     {
-        var name = Path.GetFileName(path);
-        return name.ToLowerInvariant() switch
+        var name = Path.GetFileName(path).ToLowerInvariant();
+        return name switch
         {
-            "libsceinternal.sprx" or "libsceLibcInternal.sprx" => 0,
+            "libscelibcinternal.sprx" or "libscelibcinternal.prx" => 0,
             "libscepad.sprx" or "libscepad.prx" => 10,
             "libscenpmanager.sprx" or "libscenpmanager.prx" => 20,
             "libscevideoout.sprx" or "libscevideoout.prx" => 30,
             "libsceaudioout.sprx" or "libsceaudioout.prx" => 40,
             "libsceaudio3d.sprx" or "libsceaudio3d.prx" => 50,
-            "libscengs2.sprx" or "libSceNgs2.prx" => 60,
+            "libscengs2.sprx" or "libscengs2.prx" => 60,
             _ => 100,
         };
     }
