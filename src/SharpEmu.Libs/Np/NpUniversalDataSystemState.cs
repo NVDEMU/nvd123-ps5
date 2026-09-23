@@ -52,6 +52,7 @@ internal static class NpUniversalDataSystemState
     private static readonly Dictionary<ulong, UdsArrayNode> Arrays = [];
     private static readonly Queue<UdsPostedEvent> PostedEvents = [];
     private static bool _initialized;
+    private static bool _offlineCompatibilityMode;
     private static ulong _poolSize;
     private static ulong _maximumInUseSize;
     private static int _nextContext;
@@ -94,6 +95,7 @@ internal static class NpUniversalDataSystemState
             // offline compatibility path for that bootstrap sequence.
             ResetLocked();
             _initialized = true;
+            _offlineCompatibilityMode = true;
             _poolSize = 1024 * 1024;
             return true;
         }
@@ -449,10 +451,17 @@ internal static class NpUniversalDataSystemState
         {
             if (!_initialized ||
                 !Contexts.TryGetValue(context, out var contextState) ||
-                !contextState.IsRegistered ||
                 !ServiceHandles.TryGetValue(handle, out var serviceHandle) ||
                 serviceHandle.Aborted ||
                 !Events.TryGetValue(eventHandle, out var udsEvent))
+            {
+                return false;
+            }
+
+            // Offline Unity builds can post telemetry before the registration
+            // handshake. Keep the normal lifecycle strict outside the explicit
+            // offline compatibility mode.
+            if (!contextState.IsRegistered && !_offlineCompatibilityMode)
             {
                 return false;
             }
@@ -651,6 +660,7 @@ internal static class NpUniversalDataSystemState
         Arrays.Clear();
         PostedEvents.Clear();
         _initialized = false;
+        _offlineCompatibilityMode = false;
         _poolSize = 0;
         _maximumInUseSize = 0;
         _nextContext = 0;
