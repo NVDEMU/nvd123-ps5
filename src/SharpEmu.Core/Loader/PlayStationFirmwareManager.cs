@@ -141,6 +141,44 @@ public static class PlayStationFirmwareManager
         }
     }
 
+    private static bool IsRecognizedPup(string source, out string kind)
+    {
+        kind = string.Empty;
+
+        try
+        {
+            using var stream = File.OpenRead(source);
+            Span<byte> header = stackalloc byte[5];
+            if (stream.Read(header) < 4)
+                return false;
+
+            if (header[0] == (byte)'S' &&
+                header[1] == (byte)'L' &&
+                header[2] == (byte)'B' &&
+                header[3] == (byte)'2')
+            {
+                kind = "SLB2";
+                return true;
+            }
+
+            if (header[0] == (byte)'S' &&
+                header[1] == (byte)'C' &&
+                header[2] == (byte)'E' &&
+                header[3] == (byte)'U' &&
+                header[4] == (byte)'F')
+            {
+                kind = "SCEUF";
+                return true;
+            }
+        }
+        catch
+        {
+            // Treat unreadable files as unrecognized PUPs; Install() reports the failure.
+        }
+
+        return false;
+    }
+
     private static bool InstallPup(
         string source,
         ref int installed,
