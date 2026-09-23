@@ -180,7 +180,7 @@ public static class KernelProcessCompatExports
 
     private static string NormalizeModulePath(string guestPath)
     {
-        var normalized = guestPath.Replace('\', '/').Trim();
+        var normalized = guestPath.Replace((char)92, '/').Trim();
         if (normalized.StartsWith("/app0/", StringComparison.OrdinalIgnoreCase) ||
             normalized.StartsWith("app0/", StringComparison.OrdinalIgnoreCase))
         {
