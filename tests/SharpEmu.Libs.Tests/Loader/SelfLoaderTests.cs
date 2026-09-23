@@ -138,6 +138,23 @@ public sealed class SelfLoaderTests
         Assert.Equal(["libExample.PS5"], image.ImportedModuleNames);
     }
 
+    [Fact]
+    public void Load_RecognizesPs4ElfAbiVersionZero()
+    {
+        var imageData = new byte[ElfHeaderSize];
+        WriteMinimalElfHeader(imageData.AsSpan());
+        imageData[0x07] = 9;
+        imageData[0x08] = 0;
+
+        var image = new SelfLoader().Load(imageData, new VirtualMemory());
+
+        Assert.False(image.IsSelf);
+        Assert.True(image.ElfHeader.IsPs4);
+        Assert.False(image.ElfHeader.IsPs5);
+        Assert.Equal((byte)9, image.ElfHeader.Abi);
+        Assert.Equal((byte)0, image.ElfHeader.AbiVersion);
+    }
+
     private static byte[] CreateSelfImage(uint magic, byte version, uint keyType, ushort flags)
     {
         var imageData = new byte[SelfHeaderSize + ElfHeaderSize];
