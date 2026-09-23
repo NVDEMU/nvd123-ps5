@@ -662,6 +662,22 @@ public sealed class SharpEmuRuntime : ISharpEmuRuntime
     }
 
     
+    private static int Ps4ModuleBootPriority(string path)
+    {
+        var name = Path.GetFileName(path);
+        return name.ToLowerInvariant() switch
+        {
+            "libsceinternal.sprx" or "libsceLibcInternal.sprx" => 0,
+            "libscepad.sprx" or "libscepad.prx" => 10,
+            "libscenpmanager.sprx" or "libscenpmanager.prx" => 20,
+            "libscevideoout.sprx" or "libscevideoout.prx" => 30,
+            "libsceaudioout.sprx" or "libsceaudioout.prx" => 40,
+            "libsceaudio3d.sprx" or "libsceaudio3d.prx" => 50,
+            "libscengs2.sprx" or "libSceNgs2.prx" => 60,
+            _ => 100,
+        };
+    }
+
     private List<LoadedModuleImage> LoadFirmwareModules(
         SelfImage mainImage,
         IDictionary<ulong, string> importStubs,
@@ -696,7 +712,8 @@ public sealed class SharpEmuRuntime : ISharpEmuRuntime
             .Where(path => Path.GetFileName(path).StartsWith(
                 "libSce", StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(Ps4ModuleBootPriority)
+            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
         if (modulePaths.Length == 0)
@@ -811,7 +828,8 @@ public sealed class SharpEmuRuntime : ISharpEmuRuntime
         var allModulePaths = moduleDirectories
             .SelectMany(directory => Directory
                 .EnumerateFiles(directory.Path, "*", directory.SearchOption)
-                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(Ps4ModuleBootPriority)
+                .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
                 .Where(path => !directory.LinkedOnly || IsMainImageLinkedModule(path, mainImage.ImportedModuleNames))
                 .Select(path => (Path: path, directory.StartAtBoot)))
             .Where(entry =>
