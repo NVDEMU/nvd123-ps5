@@ -219,6 +219,35 @@ public static class PlayStationPackageStager
                     return false;
                 }
 
+                // A retail encrypted/compressed SELF is not considered decrypted
+                // merely because its embedded ELF header is visible. Reject any
+                // blocked segment still carrying the encryption/compression flags.
+                for (var i = 0; i < segmentCount; i++)
+                {
+                    var segmentOffset = selfHeaderSize + (i * selfSegmentSize);
+                    if (segmentOffset + 8 > header.Length)
+                    {
+                        // The segment table extends beyond the first header read;
+                        // read each descriptor directly from the stream below.
+                        stream.Position = segmentOffset;
+                        Span<byte> segmentHeader = stackalloc byte[8];
+                        if (stream.Read(segmentHeader) < segmentHeader.Length)
+                        {
+                            message = $"PKG produced '{ebootPath}', but the SELF segment table is truncated.";
+                            return false;
+                        }
+
+                        var segmentType = BinaryPrimitives.ReadUInt64LittleEndian(segmentHeader);
+                        if ((segmentType & 0x800UL) != 0 && (segmentType & (0x2UL | 0x8UL)) != 0)
+                        {
+                            message =
+                                $"PKG produced '{ebootPath}', but at least one SELF segment is still " +
+                                "encrypted or compressed. Package decryption is incomplete.";
+                            return false;
+                        }
+                    }
+                }
+
                 elfOffset = checked(selfHeaderSize + ((long)segmentCount * selfSegmentSize));
                 if (elfOffset < 0 || elfOffset > stream.Length - 64)
                 {
