@@ -1568,6 +1568,9 @@ public sealed partial class DirectExecutionBackend
 		var expectedAvPlayerHandle =
 			string.Equals(nid, "aS66RI0gGgo", StringComparison.Ordinal) &&
 			resultValue < 0;
+		var expectedOfflineTelemetryPost =
+			string.Equals(nid, "CzkKf7ahIyU", StringComparison.Ordinal) &&
+			resultValue == unchecked((int)0x80553102);
 		var expectedTimedWaitTimeout =
 			string.Equals(nid, "27bAgiJmOh0", StringComparison.Ordinal) &&
 			unchecked((int)result) == 60;
@@ -1605,6 +1608,7 @@ public sealed partial class DirectExecutionBackend
 			!expectedMkdirAlreadyExists &&
 			!expectedFopenProbeMiss &&
 			!expectedAvPlayerHandle &&
+			!expectedOfflineTelemetryPost &&
 			!expectedTimedWaitTimeout &&
 			!expectedEqueueTimeout &&
 			!expectedJoeAndMacTelemetryTimeout &&
