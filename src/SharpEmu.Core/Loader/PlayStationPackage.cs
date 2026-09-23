@@ -83,7 +83,7 @@ public static class PlayStationPackage
         {
             var required = checked(cntOffset + 0x70);
             if (required <= data.Length)
-                contentId = ReadAsciiZ(data[(int)cntOffset + 0x40..(int)cntOffset + 0x70]);
+                contentId = ReadAsciiZ(data.Slice(checked((int)cntOffset + 0x40), 0x30));
             else
             {
                 using var stream = new FileStream(packagePath, FileMode.Open, FileAccess.Read, FileShare.Read, 0x1000, FileOptions.RandomAccess);
