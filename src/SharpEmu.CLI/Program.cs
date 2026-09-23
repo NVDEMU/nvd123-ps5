@@ -286,6 +286,22 @@ internal static partial class Program
         ebootPath = Path.GetFullPath(ebootPath);
         Console.Error.WriteLine($"[DEBUG] Full path: {ebootPath}");
 
+        // Accept an extracted PS4/PS5 application directory directly. This is
+        // useful on hosts where PKG extraction is performed by a separate,
+        // user-selected tool; the emulator only needs the resulting eboot.bin.
+        if (Directory.Exists(ebootPath))
+        {
+            var directoryEboot = new[]
+            {
+                Path.Combine(ebootPath, "eboot.bin"),
+                Path.Combine(ebootPath, "app0", "eboot.bin"),
+                Path.Combine(ebootPath, "app", "eboot.bin"),
+            }.FirstOrDefault(File.Exists);
+
+            if (directoryEboot is not null)
+                ebootPath = directoryEboot;
+        }
+
         if (!File.Exists(ebootPath))
         {
             Log.Error($"EBOOT file was not found: {ebootPath}");
