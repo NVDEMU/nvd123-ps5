@@ -51,6 +51,20 @@ public static class LibcInternalExports
         return (int)OrbisGen2Result.ORBIS_GEN2_OK;
     }
 
+    [SysAbiExport(
+        Nid = "qBS714-Jr3g",
+        ExportName = "sceLibcInternalCxaThreadAtexit",
+        Target = Generation.Gen4 | Generation.Gen5,
+        LibraryName = "LibcInternalExt")]
+    public static int LibcInternalCxaThreadAtexit(CpuContext ctx)
+    {
+        // Guest-side thread-destructor registration is not needed by the native
+        // compatibility runtime. Keep the ABI call successful so CRT startup can
+        // continue; the emulator owns thread teardown on the host side.
+        ctx[CpuRegister.Rax] = 0;
+        return (int)OrbisGen2Result.ORBIS_GEN2_OK;
+    }
+
     private static nint EnsureHeapTraceStorage()
     {
         lock (_heapTraceGate)
