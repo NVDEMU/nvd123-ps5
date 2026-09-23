@@ -552,6 +552,14 @@ public sealed class SharpEmuRuntime : ISharpEmuRuntime
                 moduleName = $"module#{i}";
             }
 
+            if (KernelModuleRegistry.IsOptionalSinglePlayerModule(moduleName))
+            {
+                KernelModuleRegistry.CompleteModuleStart(loadedModule.Handle, succeeded: true);
+                Console.Error.WriteLine(
+                    $"[RUNTIME] Skipping optional multiplayer initializer for single-player compatibility: {moduleName}");
+                continue;
+            }
+
             Console.Error.WriteLine(
                 $"[RUNTIME] Starting module {moduleName}: dt_init=0x{initEntryPoint:X16}");
 

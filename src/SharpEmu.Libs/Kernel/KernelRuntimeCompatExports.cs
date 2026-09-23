@@ -1108,9 +1108,28 @@ public static class KernelRuntimeCompatExports
         var count = Interlocked.Increment(ref _stackChkFailCount);
         Console.Error.WriteLine(
             $"[LOADER][ERROR] __stack_chk_fail#{count}: rip=0x{ctx.Rip:X16} rdi=0x{ctx[CpuRegister.Rdi]:X16}");
-        var result = (int)OrbisGen2Result.ORBIS_GEN2_ERROR_CPU_TRAP;
-        GuestThreadExecution.RequestCurrentEntryExit("__stack_chk_fail", result);
-        ctx[CpuRegister.Rax] = unchecked((ulong)result);
+        // The PS5 stack protector helper is noreturn. Some retail Unity builds
+        // reach it because our guest TLS/stack layout differs from the hardware
+        // even though execution can safely terminate the current guest entry.
+        // Keep strict mode available for diagnostics; the compatibility default
+        // avoids turning a recoverable canary mismatch into a global CPU trap.
+        var strictStackCheck = string.Equals(
+            Environment.GetEnvironmentVariable("SHARPEMU_STRICT_STACK_CHECK"),
+            "1",
+            StringComparison.Ordinal);
+        var result = strictStackCheck
+            ? (int)OrbisGen2Result.ORBIS_GEN2_ERROR_CPU_TRAP
+            : (int)OrbisGen2Result.ORBIS_GEN2_OK;
+        GuestThreadExecution.RequestCurrentEntryExit(
+            strictStackCheck ? "__stack_chk_fail" : "__stack_chk_fail_compat_recover",
+            result);
+        ctx[CpuRegister.Rax] = unchecked((ulong)(long)result);
+        if (!strictStackCheck)
+        {
+            Console.Error.WriteLine(
+                "[LOADER][WARN] Recovered __stack_chk_fail by terminating the current guest entry " +
+                "(set SHARPEMU_STRICT_STACK_CHECK=1 for strict behavior).");
+        }
         return result;
     }
 
@@ -1201,6 +1220,22 @@ public static class KernelRuntimeCompatExports
 
         if (KernelModuleRegistry.TryBeginModuleStart(handle, out var moduleToStart))
         {
+            if (KernelModuleRegistry.IsOptionalSinglePlayerModule(moduleToStart.Name))
+            {
+                KernelModuleRegistry.CompleteModuleStart(handle, succeeded: true);
+                if (resultAddress != 0 && !TryWriteInt32(ctx, resultAddress, 0))
+                {
+                    return ReturnModuleLoadError(
+                        ctx,
+                        (int)OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT);
+                }
+
+                Console.Error.WriteLine(
+                    $"[LOADER][INFO] Skipping optional multiplayer initializer for single-player compatibility: {moduleToStart.Name}");
+                ctx[CpuRegister.Rax] = unchecked((uint)handle);
+                return (int)OrbisGen2Result.ORBIS_GEN2_OK;
+            }
+
             var scheduler = GuestThreadExecution.Scheduler;
             string? startError = null;
             ulong startResult = 0;

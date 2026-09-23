@@ -94,6 +94,27 @@ public static class KernelModuleRegistry
             : moduleLoader(modulePath);
     }
 
+    /// <summary>
+    /// Identifies multiplayer-only modules whose initializer can be skipped in
+    /// the emulator's single-player compatibility path.
+    /// Set SHARPEMU_STRICT_OPTIONAL_MODULES=1 to execute it strictly.
+    /// </summary>
+    public static bool IsOptionalSinglePlayerModule(string? moduleName)
+    {
+        if (string.Equals(
+                Environment.GetEnvironmentVariable("SHARPEMU_STRICT_OPTIONAL_MODULES"),
+                "1",
+                StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return string.Equals(
+            Path.GetFileName(moduleName),
+            "libPlayFabMultiplayer.prx",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     public static int RegisterModule(
         string? modulePath,
         ulong baseAddress,
