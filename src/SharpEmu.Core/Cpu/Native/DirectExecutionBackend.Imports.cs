@@ -1527,7 +1527,7 @@ public sealed partial class DirectExecutionBackend
 		ulong r9) =>
 		rdi == 0 &&
 		rsi != 0 &&
-		rdx == 0x000144CA00000000UL &&
+		rdx is 0x000144CA00000000UL or 0x0001469800000000UL &&
 		rcx == 1 &&
 		r8 != 0 &&
 		r9 != 0;
