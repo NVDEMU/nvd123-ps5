@@ -1,16 +1,17 @@
 // Copyright (C) 2026 SharpEmu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-using System.Diagnostics;
 using System.IO.Compression;
+using System.Text;
 
 namespace SharpEmu.Core.Loader;
 
 /// <summary>
 /// Installs user-provided PS4 firmware modules.
-/// A Sony PS4UPDATE.PUP is accepted as an input source, but NVDEMU does not
-/// ship Sony keys or perform protected PUP decryption itself. When a PUP
-/// contains protected firmware, a user-selected PUP backend can process it.
+/// A Sony PS4UPDATE.PUP is accepted as an input source and is processed by
+/// NVDEMU's built-in PUP container reader. Protected firmware payloads remain
+/// subject to the platform cryptographic boundary and are not decrypted with
+/// bundled Sony private keys.
 /// </summary>
 public static class PlayStationFirmwareManager
 {
@@ -152,18 +153,8 @@ public static class PlayStationFirmwareManager
             return false;
         }
 
-        Console.Error.WriteLine($"[FIRMWARE][PUP] Accepted PS4 firmware package ({pupKind}): {source}");
-
-        var backend = FindPupBackend();
-        if (backend is null)
-        {
-            message =
-                "PS4 PUP accepted, but no PUP extraction backend is installed. " +
-                "Set NVDEMU_PUPTOOL to a user-supplied PUP extraction tool that can process " +
-                "your authorized firmware, then run --install-ps4-firmware again. " +
-                "NVDEMU does not bundle Sony firmware keys or protected-PUP decryption.";
-            return false;
-        }
+        Console.Error.WriteLine(
+            $"[FIRMWARE][PUP] Accepted PS4 firmware package ({pupKind}): {source}");
 
         var staging = Path.Combine(
             Path.GetTempPath(),
@@ -172,34 +163,15 @@ public static class PlayStationFirmwareManager
 
         try
         {
-            var arguments = $"pup_extract {Quote(source)} {Quote(staging)}";
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = backend,
-                Arguments = arguments,
-                WorkingDirectory = staging,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-            };
-
-            using var process = Process.Start(startInfo);
-            if (process is null)
-            {
-                message = $"Could not start PUP backend: {backend}";
-                return false;
-            }
-
-            var stdout = process.StandardOutput.ReadToEnd();
-            var stderr = process.StandardError.ReadToEnd();
-            process.WaitForExit();
-
-            if (process.ExitCode != 0)
+            if (!TryExtractPupContainer(
+                    source,
+                    staging,
+                    out var extractedEntries,
+                    out var protectedEntries,
+                    out var error))
             {
                 message =
-                    $"PUP backend failed with exit code {process.ExitCode}. " +
-                    $"{TrimDiagnostic(stderr, stdout)}";
+                    $"NVDEMU could read the PUP container, but could not extract its firmware payloads: {error}";
                 return false;
             }
 
@@ -207,14 +179,26 @@ public static class PlayStationFirmwareManager
 
             if (installed == 0 && skipped == 0)
             {
-                message =
-                    "PUP backend completed, but no valid libSce*.sprx modules were produced. " +
-                    "The backend may have extracted protected firmware without decrypting the modules.";
+                if (protectedEntries > 0)
+                {
+                    message =
+                        $"NVDEMU parsed {extractedEntries} PUP container entries, but {protectedEntries} " +
+                        "payload(s) are protected. The emulator does not contain Sony private keys or a " +
+                        "protected-PUP key-unwrapping implementation, so those payloads cannot be converted " +
+                        "into loadable firmware modules from the protected retail PUP alone.";
+                }
+                else
+                {
+                    message =
+                        $"NVDEMU parsed {extractedEntries} PUP container entries, but no valid " +
+                        "libSce*.sprx ELF firmware modules were present.";
+                }
+
                 return false;
             }
 
             message =
-                $"PUP processed successfully through the user-selected backend; " +
+                $"PUP processed by NVDEMU's built-in container reader; " +
                 $"installed {installed} firmware module(s), skipped {skipped}.";
             return true;
         }
@@ -231,80 +215,128 @@ public static class PlayStationFirmwareManager
         }
     }
 
-    private static string? FindPupBackend()
+    private static bool TryExtractPupContainer(
+        string source,
+        string outputDirectory,
+        out int extractedEntries,
+        out int protectedEntries,
+        out string error)
     {
-        var configured = Environment.GetEnvironmentVariable("NVDEMU_PUPTOOL");
-        if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured))
-            return Path.GetFullPath(configured);
-
-        var names = OperatingSystem.IsWindows()
-            ? new[] { "PupTool.exe", "PupTool.Core.exe", "PupTool" }
-            : new[] { "PupTool", "PupTool.Core" };
-
-        var path = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-        foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-        {
-            foreach (var name in names)
-            {
-                var candidate = Path.Combine(directory, name);
-                if (File.Exists(candidate))
-                    return candidate;
-            }
-        }
-
-        return null;
-    }
-
-    private static bool IsRecognizedPup(string path, out string kind)
-    {
-        kind = "unknown";
+        extractedEntries = 0;
+        protectedEntries = 0;
+        error = string.Empty;
 
         try
         {
-            using var stream = File.OpenRead(path);
-            Span<byte> header = stackalloc byte[8];
-            if (stream.Read(header) < 8)
+            using var stream = File.OpenRead(source);
+            Span<byte> header = stackalloc byte[32];
+            if (stream.Read(header) != header.Length)
+            {
+                error = "the file is smaller than an SLB2 header";
                 return false;
+            }
 
-            // Sony PS4/PS5 update containers commonly use the SCEUF PUP header.
-            if (header[0] == (byte)'S' &&
-                header[1] == (byte)'C' &&
-                header[2] == (byte)'E' &&
-                header[3] == (byte)'U' &&
-                header[4] == (byte)'F')
+            if (header[0] != (byte)'S' ||
+                header[1] != (byte)'L' ||
+                header[2] != (byte)'B' ||
+                header[3] != (byte)'2')
             {
-                kind = "SCEUF";
+                error =
+                    "this PUP uses a protected SCEUF/fragment container; its payload metadata is not " +
+                    "available to the built-in unencrypted SLB2 reader";
+                protectedEntries = 1;
                 return true;
             }
 
-            // PS4 download PUPs are commonly SLB2 containers holding encrypted
-            // PS4UPDATE*.PUP fragments.
-            if (header[0] == (byte)'S' &&
-                header[1] == (byte)'L' &&
-                header[2] == (byte)'B' &&
-                header[3] == (byte)'2')
+            var version = BitConverter.ToUInt32(header[4..8]);
+            var entryCount = BitConverter.ToUInt32(header[12..16]);
+            var sectorSize = BitConverter.ToUInt32(header[16..20]);
+
+            if (sectorSize == 0)
+                sectorSize = 0x200;
+
+            if (sectorSize > 0x10000)
             {
-                kind = "SLB2";
-                return true;
+                error = $"invalid SLB2 sector size 0x{sectorSize:X}";
+                return false;
             }
+
+            if (entryCount == 0 || entryCount > 10000)
+            {
+                error = $"invalid SLB2 entry count {entryCount}";
+                return false;
+            }
+
+            Console.Error.WriteLine(
+                $"[FIRMWARE][PUP] Built-in SLB2 reader: version={version}, entries={entryCount}, sectorSize=0x{sectorSize:X}");
+
+            const int entrySize = 48;
+            var tableSize = checked((int)entryCount * entrySize);
+            var table = new byte[tableSize];
+            stream.ReadExactly(table);
+
+            for (var index = 0; index < entryCount; index++)
+            {
+                var entryOffset = checked((int)index * entrySize);
+                var sectorOffset = BitConverter.ToUInt32(table, entryOffset);
+                var fileSize = BitConverter.ToUInt32(table, entryOffset + 4);
+                var nameBytes = table.AsSpan(entryOffset + 16, 32);
+                var nameLength = nameBytes.IndexOf((byte)0);
+                if (nameLength < 0)
+                    nameLength = nameBytes.Length;
+
+                var name = Encoding.ASCII.GetString(nameBytes[..nameLength]).Trim();
+                if (string.IsNullOrWhiteSpace(name))
+                    name = $"entry-{index:D5}.bin";
+
+                var dataOffset = checked((long)sectorOffset * sectorSize);
+                if (dataOffset < 0 ||
+                    dataOffset > stream.Length ||
+                    fileSize > stream.Length - dataOffset)
+                {
+                    protectedEntries++;
+                    continue;
+                }
+
+                var safeName = Path.GetFileName(name);
+                if (string.IsNullOrWhiteSpace(safeName))
+                {
+                    protectedEntries++;
+                    continue;
+                }
+
+                var destination = Path.Combine(outputDirectory, $"{index:D5}-{safeName}");
+                stream.Position = dataOffset;
+                using var output = File.Create(destination);
+                CopyExactly(stream, output, fileSize);
+                extractedEntries++;
+            }
+
+            return true;
         }
-        catch
+        catch (Exception ex)
         {
-            // Invalid/unreadable PUP.
+            error = ex.Message;
+            return false;
         }
-
-        return false;
     }
 
-    private static string TrimDiagnostic(string stderr, string stdout)
+    private static void CopyExactly(Stream input, Stream output, uint length)
     {
-        var diagnostic = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
-        diagnostic = diagnostic.Trim();
-        return diagnostic.Length <= 600 ? diagnostic : diagnostic[..600];
-    }
+        var buffer = new byte[64 * 1024];
+        var remaining = (long)length;
 
-    private static string Quote(string value) =>
-        """ + value.Replace("\", "\\").Replace(""", "\"") + """;
+        while (remaining > 0)
+        {
+            var requested = (int)Math.Min(buffer.Length, remaining);
+            var read = input.Read(buffer, 0, requested);
+            if (read <= 0)
+                throw new EndOfStreamException("Unexpected end of PUP entry.");
+
+            output.Write(buffer, 0, read);
+            remaining -= read;
+        }
+    }
 
     private static bool InstallFile(string source, out bool alreadyInstalled)
     {
