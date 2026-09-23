@@ -154,14 +154,14 @@ public static partial class Gen5MslTranslator
                 }
 
                 // Bounds-checked, EXEC-guarded write.
-                var depthQuery = dimension == ImageDimension.Dim2DArray
-                    ? $"{texture}.get_array_size()"
-                    : $"{texture}.get_depth()";
                 var coordinate = dimension == ImageDimension.Dim2D
                     ? $"uint2((uint){x}, (uint){y})"
                     : $"uint3((uint){x}, (uint){y}, (uint){z})";
-                Line($"if (exec && {x} >= 0 && {y} >= 0 && {x} < (int){texture}.get_width() && {y} < (int){texture}.get_height() && " +
-                    $"{z} >= 0 && {z} < (int){depthQuery})");
+                var bounds = dimension == ImageDimension.Dim2D
+                    ? $"exec && {x} >= 0 && {y} >= 0 && {x} < (int){texture}.get_width() && {y} < (int){texture}.get_height()"
+                    : $"exec && {x} >= 0 && {y} >= 0 && {x} < (int){texture}.get_width() && {y} < (int){texture}.get_height() && " +
+                      $"{z} >= 0 && {z} < (int){(dimension == ImageDimension.Dim2DArray ? $"{texture}.get_array_size()" : $"{texture}.get_depth()")}";
+                Line($"if ({bounds})");
                 Line("{");
                 _indent++;
                 Line($"{texture}.write({VectorLiteral(kind)}({components[0]}, {components[1]}, {components[2]}, {components[3]}), {coordinate});")
