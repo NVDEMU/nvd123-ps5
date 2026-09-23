@@ -17,6 +17,7 @@ using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using SharpEmu.Core.Cpu;
+using SharpEmu.Core.Loader;
 using SharpEmu.Core.Runtime;
 using SharpEmu.HLE.Host;
 using SharpEmu.Libs.Pad;
