@@ -2052,27 +2052,58 @@ public partial class MainWindow : Window
             {
                 foreach (var file in Directory.EnumerateFiles(folder, "eboot.bin", enumeration))
                 {
-                    var fullPath = Path.GetFullPath(file);
-                    if (!seen.Add(fullPath) || excludedPaths.Contains(fullPath))
-                    {
-                        continue;
-                    }
+                    AddScannedGame(file);
+                }
 
-                    long size = 0;
-                    try
+                // Treat recognized PS4/PS5 PKGs as first-class library entries.
+                // The package stays in the library even when it has not yet
+                // been staged; launch-time staging still verifies that a real
+                // decrypted ELF/fSELF was produced before execution.
+                foreach (var pattern in new[] { "*.pkg", "*.PKG" })
+                {
+                    foreach (var file in Directory.EnumerateFiles(folder, pattern, enumeration))
                     {
-                        size = new FileInfo(fullPath).Length;
-                    }
-                    catch (IOException exception)
-                    {
-                        Console.Error.WriteLine(
-                            $"[GUI][WARN] Could not inspect executable '{fullPath}': {exception.Message}");
-                    }
+                        if (!PlayStationPackage.TryReadInfo(file, out var packageInfo))
+                        {
+                            continue;
+                        }
 
-                    var (title, titleId, version) = TryReadParamJson(fullPath);
-                    games.Add(new GameEntry(
-                        title ?? GameNameFor(fullPath), titleId, version, fullPath, size,
-                        FindCoverFor(fullPath), FindBackgroundFor(fullPath)));
+                        var fullPath = Path.GetFullPath(file);
+                        if (!seen.Add(fullPath) || excludedPaths.Contains(fullPath))
+                        {
+                            continue;
+                        }
+
+                        var displayPath = fullPath;
+                        string? title = null;
+                        string? version = null;
+                        string? coverSource = null;
+                        string? backgroundSource = null;
+
+                        if (PlayStationPackage.TryResolveExtractedApplication(
+                                fullPath,
+                                out var extractedEboot,
+                                out _))
+                        {
+                            displayPath = extractedEboot;
+                            (title, _, version) = TryReadParamJson(extractedEboot);
+                            coverSource = extractedEboot;
+                            backgroundSource = extractedEboot;
+                        }
+
+                        title ??= !string.IsNullOrWhiteSpace(packageInfo.TitleId)
+                            ? $"{GameNameFor(fullPath)} [{packageInfo.TitleId}]"
+                            : GameNameFor(fullPath);
+
+                        games.Add(new GameEntry(
+                            title,
+                            packageInfo.TitleId,
+                            version,
+                            fullPath,
+                            GetFileSize(fullPath),
+                            coverSource is null ? null : FindCoverFor(coverSource),
+                            backgroundSource is null ? null : FindBackgroundFor(backgroundSource)));
+                    }
                 }
             }
             catch (Exception exception)
@@ -2084,6 +2115,41 @@ public partial class MainWindow : Window
 
         games.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
         return games;
+
+        void AddScannedGame(string file)
+        {
+            var fullPath = Path.GetFullPath(file);
+            if (!seen.Add(fullPath) || excludedPaths.Contains(fullPath))
+            {
+                return;
+            }
+
+            var size = GetFileSize(fullPath);
+            var (title, titleId, version) = TryReadParamJson(fullPath);
+            games.Add(new GameEntry(
+                title ?? GameNameFor(fullPath), titleId, version, fullPath, size,
+                FindCoverFor(fullPath), FindBackgroundFor(fullPath)));
+        }
+
+        static long GetFileSize(string path)
+        {
+            try
+            {
+                return new FileInfo(path).Length;
+            }
+            catch (IOException exception)
+            {
+                Console.Error.WriteLine(
+                    $"[GUI][WARN] Could not inspect library item '{path}': {exception.Message}");
+                return 0;
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                Console.Error.WriteLine(
+                    $"[GUI][WARN] Could not inspect library item '{path}': {exception.Message}");
+                return 0;
+            }
+        }
     }
 
     /// <summary>
