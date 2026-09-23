@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 using SharpEmu.Core.Runtime;
+using SharpEmu.Core.Loader;
 using SharpEmu.Core.Cpu;
 using SharpEmu.GUI;
 using SharpEmu.HLE;
@@ -289,6 +290,31 @@ internal static partial class Program
         {
             Log.Error($"EBOOT file was not found: {ebootPath}");
             return 2;
+        }
+
+        // Accept PS4 CNT and PS5 FIH package inputs as a launcher front-end.
+        // The execution core still runs the decrypted application image; when
+        // a package is supplied, use an adjacent extracted app0 tree when one
+        // is available. This isolates package handling from SELF/ELF loading.
+        if (PlayStationPackage.TryReadInfo(ebootPath, out var packageInfo))
+        {
+            Console.Error.WriteLine(
+                $"[PKG] Detected {(packageInfo.Format == PlayStationPackageFormat.Ps5Fih ? "PS5 FIH" : "PS4 CNT")} package" +
+                $" titleId={packageInfo.TitleId ?? "(unknown)"} contentId={packageInfo.ContentId ?? "(unknown)"}");
+
+            if (PlayStationPackage.TryResolveExtractedApplication(ebootPath, out var resolvedEboot, out _))
+            {
+                Console.Error.WriteLine($"[PKG] Using extracted application: {resolvedEboot}");
+                ebootPath = resolvedEboot;
+            }
+            else
+            {
+                Log.Error(
+                    "The PKG was recognized, but no extracted app0/eboot.bin was found next to it. " +
+                    "SharpEmu's execution core currently consumes decrypted ELF/SELF images; " +
+                    "direct PS4/PS5 PKG extraction is the next package-backend layer.");
+                return 2;
+            }
         }
 
         if (!TryGetDebugServerOptions(args, out var debugServerEnabled, out var debugServerOptions, out var debugServerError))
