@@ -168,7 +168,24 @@ public sealed unsafe partial class DirectExecutionBackend
 			record.ExceptionCode = DBG_PRINTEXCEPTION_C;
 			byte* contextRecord = stackalloc byte[Win64ContextSize];
 			new Span<byte>(contextRecord, Win64ContextSize).Clear();
-			EXCEPTION_POINTERS pointers;
+			if (exceptionRecoveredBadIndirectCall)
+		{
+			for (int i = 0; i < offsets.Length; i++)
+			{
+				*(ulong*)(registers + offsets[i]) = ReadCtxU64(contextRecord, CTX_RAX + i * 8);
+			}
+			if (vectorRegisters != null)
+			{
+				Buffer.MemoryCopy(
+					contextRecord + Win64ContextXmm0Offset,
+					vectorRegisters,
+					XmmBlockSize,
+					XmmBlockSize);
+			}
+			return true;
+		}
+
+		EXCEPTION_POINTERS pointers;
 			pointers.ExceptionRecord = &record;
 			pointers.ContextRecord = contextRecord;
 			_ = VectoredHandler(&pointers);
@@ -270,6 +287,7 @@ public sealed unsafe partial class DirectExecutionBackend
 			return false;
 		}
 
+		bool exceptionRecoveredBadIndirectCall = false;
 		byte* contextRecord = stackalloc byte[Win64ContextSize];
 		new Span<byte>(contextRecord, Win64ContextSize).Clear();
 		int[] offsets = PosixRegisterOffsets;
@@ -291,6 +309,7 @@ public sealed unsafe partial class DirectExecutionBackend
 		}
 		_posixXmmContextBridged = vectorRegisters != null;
 
+		exceptionRecoveredBadIndirectCall = false;
 		EXCEPTION_RECORD record = default;
 		record.ExceptionAddress = (void*)ReadCtxU64(contextRecord, CTX_RIP);
 		if (signal == PosixSigIll)
@@ -314,6 +333,7 @@ public sealed unsafe partial class DirectExecutionBackend
 				accessType == 8 &&
 				TryRecoverPosixBadIndirectCall(contextRecord, out var recoveredTarget, out var recoveredReturn))
 			{
+				exceptionRecoveredBadIndirectCall = true;
 				Console.Error.WriteLine(
 					$"[LOADER][INFO] Recovered POSIX instruction-fetch fault: " +
 					$"bad_target=0x{faultAddress:X16} return=0x{recoveredReturn:X16} " +
