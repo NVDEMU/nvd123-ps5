@@ -700,12 +700,12 @@ public static class PadExports
         var input = HostPlatform.Current.Input;
         var acceptsKeyboardInput = input.IsHostWindowFocused();
         var buttons = acceptsKeyboardInput ? ReadKeyboardButtons(input) : 0;
-        var leftX = acceptsKeyboardInput ? ReadAnalogStick(input.IsKeyDown(0x41), input.IsKeyDown(0x44)) : (byte)128;
-        var leftY = acceptsKeyboardInput ? ReadAnalogStick(input.IsKeyDown(0x57), input.IsKeyDown(0x53)) : (byte)128;
+        var leftX = acceptsKeyboardInput ? ReadAnalogStick(input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Left)), input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Right))) : (byte)128;
+        var leftY = acceptsKeyboardInput ? ReadAnalogStick(input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Up)), input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Down))) : (byte)128;
         var rightX = acceptsKeyboardInput ? ReadAnalogStick(input.IsKeyDown(0x4A), input.IsKeyDown(0x4C)) : (byte)128;
         var rightY = acceptsKeyboardInput ? ReadAnalogStick(input.IsKeyDown(0x49), input.IsKeyDown(0x4B)) : (byte)128;
-        var l2 = acceptsKeyboardInput && input.IsKeyDown(0x52) ? (byte)255 : (byte)0;
-        var r2 = acceptsKeyboardInput && input.IsKeyDown(0x46) ? (byte)255 : (byte)0;
+        var l2 = acceptsKeyboardInput && input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.L2)) ? (byte)255 : (byte)0;
+        var r2 = acceptsKeyboardInput && input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.R2)) ? (byte)255 : (byte)0;
         var gamepadType = HostGamepadType.Generic;
         var connection = HostGamepadConnection.Unknown;
         var motion = default(HostMotionState);
@@ -856,26 +856,22 @@ public static class PadExports
     private static uint ReadKeyboardButtons(IHostInput input)
     {
         uint buttons = 0;
-        // D-pad
-        if (input.IsKeyDown(0x25) || input.IsKeyDown(0x41)) buttons |= OrbisPadButton.Left;   // Left / A
-        if (input.IsKeyDown(0x27) || input.IsKeyDown(0x44)) buttons |= OrbisPadButton.Right;  // Right / D
-        if (input.IsKeyDown(0x26) || input.IsKeyDown(0x57)) buttons |= OrbisPadButton.Up;     // Up / W
-        if (input.IsKeyDown(0x28) || input.IsKeyDown(0x53)) buttons |= OrbisPadButton.Down;   // Down / S
-        // Face buttons
-        if (input.IsKeyDown(0x5A) || input.IsKeyDown(0x0D)) buttons |= OrbisPadButton.Cross;    // Z / Enter
-        if (input.IsKeyDown(0x58) || input.IsKeyDown(0x1B)) buttons |= OrbisPadButton.Circle;   // X / Escape
-        if (input.IsKeyDown(0x43)) buttons |= OrbisPadButton.Square;                            // C
-        if (input.IsKeyDown(0x56)) buttons |= OrbisPadButton.Triangle;                          // V
-        // Shoulder buttons
-        if (input.IsKeyDown(0x51)) buttons |= OrbisPadButton.L1;                                // Q
-        if (input.IsKeyDown(0x45)) buttons |= OrbisPadButton.R1;                                // E
-        if (input.IsKeyDown(0x52)) buttons |= OrbisPadButton.L2;                                // R (digital)
-        if (input.IsKeyDown(0x46)) buttons |= OrbisPadButton.R2;                                // F (digital)
-        // Options (Start)
-        if (input.IsKeyDown(0x09) || input.IsKeyDown(0x08)) buttons |= OrbisPadButton.Options;  // Tab / Backspace
-        if (input.IsKeyDown(0x20)) buttons |= OrbisPadButton.Share;                              // Space
-        if (input.IsKeyDown(0x10)) buttons |= OrbisPadButton.L3;                                // Shift
-        if (input.IsKeyDown(0x11)) buttons |= OrbisPadButton.R3;                                // Ctrl
+        if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Left))) buttons |= OrbisPadButton.Left;
+        if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Right))) buttons |= OrbisPadButton.Right;
+        if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Up))) buttons |= OrbisPadButton.Up;
+        if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Down))) buttons |= OrbisPadButton.Down;
+        if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Cross))) buttons |= OrbisPadButton.Cross;
+        if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Circle))) buttons |= OrbisPadButton.Circle;
+        if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Square))) buttons |= OrbisPadButton.Square;
+        if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Triangle))) buttons |= OrbisPadButton.Triangle;
+        if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.L1))) buttons |= OrbisPadButton.L1;
+        if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.R1))) buttons |= OrbisPadButton.R1;
+        if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.L2))) buttons |= OrbisPadButton.L2;
+        if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.R2))) buttons |= OrbisPadButton.R2;
+        if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.L3))) buttons |= OrbisPadButton.L3;
+        if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.R3))) buttons |= OrbisPadButton.R3;
+        if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Options))) buttons |= OrbisPadButton.Options;
+        if (input.IsKeyDown(KeyboardBindings.Get(KeyboardBindings.Share))) buttons |= OrbisPadButton.Share;
         return buttons;
     }
 
