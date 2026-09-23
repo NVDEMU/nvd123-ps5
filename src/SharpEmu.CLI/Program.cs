@@ -112,7 +112,11 @@ internal static partial class Program
 
         if (OperatingSystem.IsMacOS() || OperatingSystem.IsLinux())
         {
-            if (OperatingSystem.IsMacOS())
+            if (OperatingSystem.IsMacOS() &&
+                string.Equals(
+                    Environment.GetEnvironmentVariable("SHARPEMU_GPU_BACKEND"),
+                    "vulkan",
+                    StringComparison.OrdinalIgnoreCase))
             {
                 ConfigureMoltenVkDefaults();
                 PreloadMacVulkanLoader();
