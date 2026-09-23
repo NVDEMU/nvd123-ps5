@@ -271,10 +271,6 @@ public sealed partial class DirectExecutionBackend
 		// Keep the byte-pattern check strict so the opt-in cannot guess at an
 		// unrelated function layout.
 		if (string.Equals(importStubEntry.Nid, "Ou3iL1abvng", StringComparison.Ordinal) &&
-			string.Equals(
-				Environment.GetEnvironmentVariable("SHARPEMU_IGNORE_STACK_CHK"),
-				"1",
-				StringComparison.Ordinal) &&
 			num7 >= 0x20)
 		{
 			var returnCode = (byte*)num7;
