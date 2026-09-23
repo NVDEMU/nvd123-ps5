@@ -37,13 +37,13 @@ internal sealed class DirectMemoryAllocationMap
         if (length == 0 || alignment == 0 || searchStart >= searchEnd)
             return false;
 
-        var firstIndex = Math.Max(0, FindLastIndexAtOrBelow(_freeRanges.Keys, searchStart));
+        var firstIndex = Math.Max(0, FindLastIndexAtOrBelow(_freeRanges, searchStart));
         for (var index = firstIndex; index < _freeRanges.Count; index++)
         {
-            var rangeStart = _freeRanges.Keys[index];
+            var rangeStart = _freeRanges.GetKeyAtIndex(index);
             if (rangeStart >= searchEnd)
                 break;
-            var rangeEnd = rangeStart + _freeRanges.Values[index];
+            var rangeEnd = rangeStart + _freeRanges.GetValueAtIndex(index);
             var limit = Math.Min(rangeEnd, searchEnd);
             if (!TryAlignWithinRange(Math.Max(searchStart, rangeStart), limit, alignment, out var candidate) ||
                 length > limit - candidate)
@@ -71,13 +71,13 @@ internal sealed class DirectMemoryAllocationMap
         if (alignment == 0 || searchStart >= searchEnd)
             return false;
 
-        var firstIndex = Math.Max(0, FindLastIndexAtOrBelow(_freeRanges.Keys, searchStart));
+        var firstIndex = Math.Max(0, FindLastIndexAtOrBelow(_freeRanges, searchStart));
         for (var index = firstIndex; index < _freeRanges.Count; index++)
         {
-            var rangeStart = _freeRanges.Keys[index];
+            var rangeStart = _freeRanges.GetKeyAtIndex(index);
             if (rangeStart >= searchEnd)
                 break;
-            var limit = Math.Min(rangeStart + _freeRanges.Values[index], searchEnd);
+            var limit = Math.Min(rangeStart + _freeRanges.GetValueAtIndex(index), searchEnd);
             if (!TryAlignWithinRange(Math.Max(searchStart, rangeStart), limit, alignment, out var candidate) ||
                 limit - candidate <= length)
                 continue;
@@ -89,16 +89,16 @@ internal sealed class DirectMemoryAllocationMap
 
     public bool TryFindAllocation(ulong address, bool findNext, out Allocation allocation)
     {
-        var index = FindLastIndexAtOrBelow(_allocations.Keys, address);
+        var index = FindLastIndexAtOrBelow(_allocations, address);
         if (index >= 0)
         {
-            allocation = _allocations.Values[index];
+            allocation = _allocations.GetValueAtIndex(index);
             if (address - allocation.Start < allocation.Length)
                 return true;
         }
         if (findNext && index + 1 < _allocations.Count)
         {
-            allocation = _allocations.Values[index + 1];
+            allocation = _allocations.GetValueAtIndex(index + 1);
             return true;
         }
         allocation = default;
@@ -109,7 +109,7 @@ internal sealed class DirectMemoryAllocationMap
     {
         if (length == 0 || address > _capacity || length > _capacity - address)
             return false;
-        var index = FindLastIndexAtOrBelow(_allocations.Keys, address);
+        var index = FindLastIndexAtOrBelow(_allocations, address);
         if (index < 0)
             return false;
 
@@ -117,7 +117,7 @@ internal sealed class DirectMemoryAllocationMap
         var end = address + length;
         for (; index < _allocations.Count; index++)
         {
-            var allocation = _allocations.Values[index];
+            var allocation = _allocations.GetValueAtIndex(index);
             var allocationEnd = allocation.Start + allocation.Length;
             if (allocation.Start > current || allocationEnd <= current)
                 return false;
@@ -138,10 +138,10 @@ internal sealed class DirectMemoryAllocationMap
             throw new InvalidOperationException("The physical release range is not fully allocated.");
 
         var end = address + length;
-        var index = FindLastIndexAtOrBelow(_allocations.Keys, address);
+        var index = FindLastIndexAtOrBelow(_allocations, address);
         while (index < _allocations.Count)
         {
-            var allocation = _allocations.Values[index];
+            var allocation = _allocations.GetValueAtIndex(index);
             if (allocation.Start >= end)
                 break;
             var allocationEnd = allocation.Start + allocation.Length;
@@ -167,15 +167,15 @@ internal sealed class DirectMemoryAllocationMap
         var previousIndex = FindLastIndexAtOrBelow(_freeRanges.Keys, address);
         var nextIndex = previousIndex + 1;
         if (previousIndex >= 0 &&
-            _freeRanges.Keys[previousIndex] + _freeRanges.Values[previousIndex] == address)
+            _freeRanges.GetKeyAtIndex(previousIndex) + _freeRanges.GetValueAtIndex(previousIndex) == address)
         {
-            address = _freeRanges.Keys[previousIndex];
+            address = _freeRanges.GetKeyAtIndex(previousIndex);
             _freeRanges.RemoveAt(previousIndex);
             nextIndex = previousIndex;
         }
-        if (nextIndex < _freeRanges.Count && _freeRanges.Keys[nextIndex] == end)
+        if (nextIndex < _freeRanges.Count && _freeRanges.GetKeyAtIndex(nextIndex) == end)
         {
-            end += _freeRanges.Values[nextIndex];
+            end += _freeRanges.GetValueAtIndex(nextIndex);
             _freeRanges.RemoveAt(nextIndex);
         }
         _freeRanges.Add(address, end - address);
@@ -194,18 +194,17 @@ internal sealed class DirectMemoryAllocationMap
         return true;
     }
 
-    private static int FindLastIndexAtOrBelow(IList<ulong> keys, ulong address)
+    private static int FindLastIndexAtOrBelow<T>(SortedList<ulong, T> list, ulong address)
     {
         var lower = 0;
-        var upper = keys.Count;
+        var upper = list.Count;
         while (lower < upper)
         {
             var middle = lower + (upper - lower) / 2;
-            if (keys[middle] <= address)
+            if (list.GetKeyAtIndex(middle) <= address)
                 lower = middle + 1;
             else
                 upper = middle;
         }
         return lower - 1;
-    }
-}
+    }}
