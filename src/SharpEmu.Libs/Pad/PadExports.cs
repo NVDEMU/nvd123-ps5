@@ -857,10 +857,10 @@ public static class PadExports
     {
         uint buttons = 0;
         // D-pad
-        if (input.IsKeyDown(0x25)) buttons |= OrbisPadButton.Left;
-        if (input.IsKeyDown(0x27)) buttons |= OrbisPadButton.Right;
-        if (input.IsKeyDown(0x26)) buttons |= OrbisPadButton.Up;
-        if (input.IsKeyDown(0x28)) buttons |= OrbisPadButton.Down;
+        if (input.IsKeyDown(0x25) || input.IsKeyDown(0x41)) buttons |= OrbisPadButton.Left;   // Left / A
+        if (input.IsKeyDown(0x27) || input.IsKeyDown(0x44)) buttons |= OrbisPadButton.Right;  // Right / D
+        if (input.IsKeyDown(0x26) || input.IsKeyDown(0x57)) buttons |= OrbisPadButton.Up;     // Up / W
+        if (input.IsKeyDown(0x28) || input.IsKeyDown(0x53)) buttons |= OrbisPadButton.Down;   // Down / S
         // Face buttons
         if (input.IsKeyDown(0x5A) || input.IsKeyDown(0x0D)) buttons |= OrbisPadButton.Cross;    // Z / Enter
         if (input.IsKeyDown(0x58) || input.IsKeyDown(0x1B)) buttons |= OrbisPadButton.Circle;   // X / Escape
