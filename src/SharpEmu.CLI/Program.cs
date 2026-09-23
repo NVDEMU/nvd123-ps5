@@ -184,8 +184,16 @@ internal static partial class Program
     {
         try
         {
-            _ = MacSetEnv("MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS", "0", 0);
+            // Rosetta + Apple Silicon is sensitive to highly asynchronous
+            // MoltenVK submission. Keep queue submission on the caller thread so
+            // a GPU failure cannot race the guest/render scheduler.
+            _ = MacSetEnv("MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS", "1", 0);
             _ = MacSetEnv("MVK_CONFIG_SHOULD_MAXIMIZE_CONCURRENT_COMPILATION", "1", 0);
+            // Bound in-flight Metal work and avoid placement-heap aliasing while
+            // running the x86-64 emulator under Rosetta. This trades some peak
+            // throughput for much more predictable resource lifetime.
+            _ = MacSetEnv("MVK_CONFIG_MAX_ACTIVE_METAL_COMMAND_BUFFERS_PER_QUEUE", "16", 0);
+            _ = MacSetEnv("MVK_CONFIG_USE_MTLHEAP", "0", 0);
             // Apple Silicon argument-buffer path has known MoltenVK 1.4.x compute/resource correctness issues.\n            // Prefer direct Metal resource bindings for emulator guest workloads; this also avoids\n            // argument-buffer residency hazards that can escalate into a device-lost GPU submission.\n            _ = MacSetEnv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "0", 0);
             _ = MacSetEnv("MVK_CONFIG_RESUME_LOST_DEVICE", "1", 0);
         }
