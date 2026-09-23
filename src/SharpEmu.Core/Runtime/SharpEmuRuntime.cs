@@ -937,7 +937,15 @@ public sealed class SharpEmuRuntime : ISharpEmuRuntime
 
             if (KernelModuleRegistry.TryFindByExactPath(modulePath, out var existingModule))
             {
-                return KernelModuleRegistry.ModuleLoadResult.Success(existingModule.Handle);
+                var existingStart = StartLoadedModule(
+                    existingModule.Handle,
+                    loadedModuleImages,
+                    activeImportStubs,
+                    activeRuntimeSymbols,
+                    mainImage);
+                return existingStart == OrbisGen2Result.ORBIS_GEN2_OK
+                    ? KernelModuleRegistry.ModuleLoadResult.Success(existingModule.Handle)
+                    : KernelModuleRegistry.ModuleLoadResult.Failure((int)existingStart);
             }
 
             try
@@ -990,8 +998,20 @@ public sealed class SharpEmuRuntime : ISharpEmuRuntime
                     isSystemModule: false);
                 loadedModuleImages.Add(new LoadedModuleImage(modulePath, moduleImage, handle, StartAtBoot: false));
                 RebindImportedDataSymbols(mainImage, loadedModuleImages, activeRuntimeSymbols);
+
+                var startResult = StartLoadedModule(
+                    handle,
+                    loadedModuleImages,
+                    activeImportStubs,
+                    activeRuntimeSymbols,
+                    mainImage);
+                if (startResult != OrbisGen2Result.ORBIS_GEN2_OK)
+                {
+                    return KernelModuleRegistry.ModuleLoadResult.Failure((int)startResult);
+                }
+
                 Console.Error.WriteLine(
-                    $"[RUNTIME] Loaded requested module '{guestModulePath}' as {Path.GetFileName(modulePath)}: " +
+                    $"[RUNTIME] Loaded+started requested module '{guestModulePath}' as {Path.GetFileName(modulePath)}: " +
                     $"handle={handle}, imports={moduleImage.ImportStubs.Count}, symbols={moduleImage.RuntimeSymbols.Count}");
                 return KernelModuleRegistry.ModuleLoadResult.Success(handle);
             }
@@ -1062,6 +1082,65 @@ public sealed class SharpEmuRuntime : ISharpEmuRuntime
         foreach (var entry in source)
         {
             destination.Add(entry);
+        }
+    }
+
+    private OrbisGen2Result StartLoadedModule(
+        int handle,
+        IReadOnlyList<LoadedModuleImage> loadedModuleImages,
+        IReadOnlyDictionary<ulong, string> activeImportStubs,
+        IReadOnlyDictionary<string, ulong> activeRuntimeSymbols,
+        SelfImage mainImage)
+    {
+        var loadedModule = loadedModuleImages.FirstOrDefault(entry => entry.Handle == handle);
+        if (loadedModule.Handle != handle)
+        {
+            return OrbisGen2Result.ORBIS_GEN2_ERROR_NOT_FOUND;
+        }
+
+        if (loadedModule.Image.InitFunctionEntryPoint < 0x10000)
+        {
+            _ = KernelModuleRegistry.TryBeginModuleStart(handle, out _);
+            return OrbisGen2Result.ORBIS_GEN2_OK;
+        }
+
+        var moduleName = Path.GetFileName(loadedModule.Path);
+        if (KernelModuleRegistry.IsOptionalSinglePlayerModule(moduleName))
+        {
+            _ = KernelModuleRegistry.TryBeginModuleStart(handle, out _);
+            KernelModuleRegistry.CompleteModuleStart(handle, succeeded: true);
+            Console.Error.WriteLine(
+                $"[RUNTIME] Skipping optional multiplayer initializer for single-player compatibility: {moduleName}");
+            return OrbisGen2Result.ORBIS_GEN2_OK;
+        }
+
+        if (!KernelModuleRegistry.TryBeginModuleStart(handle, out _))
+        {
+            // Already started or currently starting through a recursive dependency.
+            return OrbisGen2Result.ORBIS_GEN2_OK;
+        }
+
+        var generation = mainImage.ElfHeader.IsPs5 ? Generation.Gen5 : Generation.Gen4;
+        try
+        {
+            Console.Error.WriteLine(
+                $"[RUNTIME] Starting dynamic module {moduleName}: dt_init=0x{loadedModule.Image.InitFunctionEntryPoint:X16}");
+            var result = _cpuDispatcher.DispatchModuleInitializer(
+                loadedModule.Image.InitFunctionEntryPoint,
+                generation,
+                activeImportStubs,
+                activeRuntimeSymbols,
+                moduleName,
+                _cpuExecutionOptions);
+            KernelModuleRegistry.CompleteModuleStart(
+                handle,
+                result == OrbisGen2Result.ORBIS_GEN2_OK);
+            return result;
+        }
+        catch
+        {
+            KernelModuleRegistry.CompleteModuleStart(handle, succeeded: false);
+            throw;
         }
     }
 
