@@ -13,6 +13,96 @@ namespace SharpEmu.Libs.Agc;
 // bridge HLE-only so PS5 AGC exports remain unchanged.
 public static partial class AgcExports
 {
+    [SysAbiExport(
+        Nid = "zwY0YV91TTI",
+        ExportName = "sceGnmSubmitCommandBuffers",
+        Target = Generation.Gen4,
+        LibraryName = "libSceGnmDriver")]
+    public static int Ps4GnmSubmitCommandBuffersExport(CpuContext ctx) =>
+        SubmitPs4GnmCommandBuffers(
+            ctx,
+            unchecked((uint)ctx[CpuRegister.Rdi]),
+            ctx[CpuRegister.Rsi],
+            ctx[CpuRegister.Rdx],
+            ctx[CpuRegister.Rcx],
+            ctx[CpuRegister.R8]);
+
+    [SysAbiExport(
+        Nid = "jRcI8VcgTz4",
+        ExportName = "sceGnmSubmitCommandBuffersForWorkload",
+        Target = Generation.Gen4,
+        LibraryName = "libSceGnmDriver")]
+    public static int Ps4GnmSubmitCommandBuffersForWorkloadExport(CpuContext ctx) =>
+        SubmitPs4GnmCommandBuffers(
+            ctx,
+            unchecked((uint)ctx[CpuRegister.Rsi]),
+            ctx[CpuRegister.Rdx],
+            ctx[CpuRegister.Rcx],
+            ctx[CpuRegister.R8],
+            ctx[CpuRegister.R9]);
+
+    [SysAbiExport(
+        Nid = "xbxNatawohc",
+        ExportName = "sceGnmSubmitAndFlipCommandBuffers",
+        Target = Generation.Gen4,
+        LibraryName = "libSceGnmDriver")]
+    public static int Ps4GnmSubmitAndFlipCommandBuffersExport(CpuContext ctx)
+    {
+        if (!ctx.TryReadUInt64(ctx[CpuRegister.Rsp] + 0x08, out var bufferIndex) ||
+            !ctx.TryReadUInt64(ctx[CpuRegister.Rsp] + 0x10, out var flipMode) ||
+            !ctx.TryReadUInt64(ctx[CpuRegister.Rsp] + 0x18, out var flipArgument))
+        {
+            return ctx.SetReturn(OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT);
+        }
+
+        return SubmitPs4GnmAndFlip(
+            ctx,
+            unchecked((uint)ctx[CpuRegister.Rdi]),
+            ctx[CpuRegister.Rsi],
+            ctx[CpuRegister.Rdx],
+            ctx[CpuRegister.Rcx],
+            ctx[CpuRegister.R8],
+            unchecked((int)ctx[CpuRegister.R9]),
+            unchecked((int)bufferIndex),
+            unchecked((int)flipMode),
+            unchecked((long)flipArgument));
+    }
+
+    [SysAbiExport(
+        Nid = "Ga6r7H6Y0RI",
+        ExportName = "sceGnmSubmitAndFlipCommandBuffersForWorkload",
+        Target = Generation.Gen4,
+        LibraryName = "libSceGnmDriver")]
+    public static int Ps4GnmSubmitAndFlipCommandBuffersForWorkloadExport(CpuContext ctx)
+    {
+        if (!ctx.TryReadUInt64(ctx[CpuRegister.Rsp] + 0x08, out var videoOutHandle) ||
+            !ctx.TryReadUInt64(ctx[CpuRegister.Rsp] + 0x10, out var bufferIndex) ||
+            !ctx.TryReadUInt64(ctx[CpuRegister.Rsp] + 0x18, out var flipMode) ||
+            !ctx.TryReadUInt64(ctx[CpuRegister.Rsp] + 0x20, out var flipArgument))
+        {
+            return ctx.SetReturn(OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT);
+        }
+
+        return SubmitPs4GnmAndFlip(
+            ctx,
+            unchecked((uint)ctx[CpuRegister.Rsi]),
+            ctx[CpuRegister.Rdx],
+            ctx[CpuRegister.Rcx],
+            ctx[CpuRegister.R8],
+            ctx[CpuRegister.R9],
+            unchecked((int)videoOutHandle),
+            unchecked((int)bufferIndex),
+            unchecked((int)flipMode),
+            unchecked((long)flipArgument));
+    }
+
+    [SysAbiExport(
+        Nid = "yvZ73uQUqrk",
+        ExportName = "sceGnmSubmitDone",
+        Target = Generation.Gen4,
+        LibraryName = "libSceGnmDriver")]
+    public static int Ps4GnmSubmitDoneExport(CpuContext ctx) => SubmitPs4GnmDone(ctx);
+
     private static ulong _ps4GnmSubmissionSequence;
 
     internal static int SubmitPs4GnmCommandBuffers(
