@@ -1137,10 +1137,43 @@ internal sealed partial class MetalCommandStreamHost : IRenderHost, IShaderPipel
         _ = image;
     }
 
+    private bool TryGetGuestTarget(ResourceSlotIdentifier image, out GuestRenderTarget target)
+    {
+        if (_guestTargets.TryGetValue(image, out target))
+        {
+            return true;
+        }
+
+        // ColorModeResolve is consumed before normal attachment acquisition, so a resolve
+        // can legitimately arrive before AcquireColorAttachment has populated _guestTargets.
+        var context = RequireContext();
+        for (var slot = 0u; slot < ContextRegisters.ColorTargetCount; slot++)
+        {
+            if (ColorTargetResolver.Resolve(context, slot, 0, ignoreTargetMask: true, out var resolvedSlot) is not { } resolution)
+            {
+                continue;
+            }
+
+            var request = resolution.Request;
+            if (!_imageIdentifiers.TryGetValue(request.Description.Data.Address, out var identifier) || identifier != image)
+            {
+                continue;
+            }
+
+            var state = new ColorTargetState(in resolution, resolvedSlot, image);
+            target = GuestTargetOf(in state, context.ColorTargets[resolvedSlot], context.RenderTargetMaskForSlot(resolvedSlot));
+            _guestTargets[image] = target;
+            return true;
+        }
+
+        target = default;
+        return false;
+    }
+
     void IRenderHost.ResolveImage(ResourceSlotIdentifier source, uint sourceMip, uint sourceLayer, ResourceSlotIdentifier destination, uint destinationMip, uint destinationLayer)
     {
         _ = (sourceMip, sourceLayer, destinationMip, destinationLayer);
-        if (!_guestTargets.TryGetValue(source, out var from) || !_guestTargets.TryGetValue(destination, out var to))
+        if (!TryGetGuestTarget(source, out var from) || !TryGetGuestTarget(destination, out var to))
         {
             throw Fatal($"The resolve names an image that was never bound as a color target: source={source.Index} destination={destination.Index}.");
         }
