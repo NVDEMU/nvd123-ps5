@@ -103,14 +103,12 @@ public sealed partial class DirectExecutionBackend
 
         var rsp = ReadCtxU64(contextRecord, CTX_RSP);
         if (rsp < sizeof(ulong) ||
-            !TryReadStackU64(rsp, out var returnRip) ||
-            returnRip == rip ||
-            (!IsLikelyReturnAddress(returnRip) && !IsLikelyPs5GuestReturnAddress(returnRip)))
+            !TryFindPs5GuestReturnAddressOnStack(rsp, out var returnRip, out var returnSlot))
         {
             return false;
         }
 
-        WriteCtxU64(contextRecord, CTX_RSP, rsp + sizeof(ulong));
+        WriteCtxU64(contextRecord, CTX_RSP, returnSlot + sizeof(ulong));
         WriteCtxU64(contextRecord, CTX_RIP, returnRip);
         WriteCtxU64(contextRecord, CTX_RAX, 0);
 
@@ -119,6 +117,40 @@ public sealed partial class DirectExecutionBackend
             $"returned to 0x{returnRip:X16}.");
         Console.Error.Flush();
         return true;
+    }
+
+    private static unsafe bool TryFindPs5GuestReturnAddressOnStack(
+        ulong rsp,
+        out ulong returnRip,
+        out ulong returnSlot)
+    {
+        returnRip = 0;
+        returnSlot = 0;
+
+        // The compatibility stub's CALL/UD2 sequence can be reached through
+        // different compiler epilogues. Prefer the normal return slot, then
+        // inspect a bounded set of aligned stack slots. The byte pattern above
+        // remains mandatory, so this cannot turn an arbitrary UD2 into a return.
+        const int maxSlots = 32;
+        for (var slotIndex = 0; slotIndex < maxSlots; slotIndex++)
+        {
+            var slot = rsp + (ulong)(slotIndex * sizeof(ulong));
+            if (slot < rsp || !TryReadStackU64(slot, out var candidate) || candidate == 0)
+            {
+                continue;
+            }
+
+            if (!IsLikelyPs5GuestReturnAddress(candidate))
+            {
+                continue;
+            }
+
+            returnRip = candidate;
+            returnSlot = slot;
+            return true;
+        }
+
+        return false;
     }
 
     // PS5 user modules are normally mapped in the 0x800000000 guest-code window.
