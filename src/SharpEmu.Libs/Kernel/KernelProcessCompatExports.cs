@@ -89,6 +89,95 @@ public static class KernelProcessCompatExports
         return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_OK);
     }
 
+    [SysAbiExport(
+        Nid = "g0VTBxfJyu0",
+        ExportName = "sceKernelGetCurrentCpu",
+        Target = Generation.Gen4,
+        LibraryName = "libKernel")]
+    public static int KernelGetCurrentCpu(CpuContext ctx)
+    {
+        ctx[CpuRegister.Rax] = 0;
+        return (int)OrbisGen2Result.ORBIS_GEN2_OK;
+    }
+
+    [SysAbiExport(
+        Nid = "IuxnUuXk6Bg",
+        ExportName = "sceKernelGetModuleList",
+        Target = Generation.Gen4,
+        LibraryName = "libKernel")]
+    public static int KernelGetModuleList(CpuContext ctx)
+    {
+        var handlesAddress = ctx[CpuRegister.Rdi];
+        var capacity = ctx[CpuRegister.Rsi];
+        var outCountAddress = ctx[CpuRegister.Rdx];
+        if (handlesAddress == 0 || outCountAddress == 0)
+        {
+            return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT);
+        }
+
+        var handles = KernelModuleRegistry.GetModuleHandles(includeSystemModules: true);
+        if ((ulong)handles.Length > capacity)
+        {
+            return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_BUSY);
+        }
+
+        for (var i = 0; i < handles.Length; i++)
+        {
+            if (!ctx.TryWriteUInt32(
+                    handlesAddress + ((ulong)i * sizeof(int)),
+                    unchecked((uint)handles[i])))
+            {
+                return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT);
+            }
+        }
+
+        if (!ctx.TryWriteUInt64(outCountAddress, unchecked((ulong)handles.Length)))
+        {
+            return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT);
+        }
+
+        return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_OK);
+    }
+
+    [SysAbiExport(
+        Nid = "ZzzC3ZGVAkc",
+        ExportName = "sceKernelGetModuleList2",
+        Target = Generation.Gen4,
+        LibraryName = "libKernel")]
+    public static int KernelGetModuleList2(CpuContext ctx)
+    {
+        var handlesAddress = ctx[CpuRegister.Rdi];
+        var capacity = ctx[CpuRegister.Rsi];
+        var outCountAddress = ctx[CpuRegister.Rdx];
+        if (handlesAddress == 0 || outCountAddress == 0)
+        {
+            return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT);
+        }
+
+        var handles = KernelModuleRegistry.GetModuleHandles(includeSystemModules: false);
+        if ((ulong)handles.Length > capacity)
+        {
+            return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_BUSY);
+        }
+
+        for (var i = 0; i < handles.Length; i++)
+        {
+            if (!ctx.TryWriteUInt32(
+                    handlesAddress + ((ulong)i * sizeof(int)),
+                    unchecked((uint)handles[i])))
+            {
+                return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT);
+            }
+        }
+
+        if (!ctx.TryWriteUInt64(outCountAddress, unchecked((ulong)handles.Length)))
+        {
+            return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT);
+        }
+
+        return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_OK);
+    }
+
     private static string NormalizeModulePath(string guestPath)
     {
         var normalized = guestPath.Replace('\', '/').Trim();
