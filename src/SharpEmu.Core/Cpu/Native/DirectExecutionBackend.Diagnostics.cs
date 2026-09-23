@@ -470,6 +470,20 @@ public sealed partial class DirectExecutionBackend
 		{
 			return false;
 		}
+
+		// The illegal-instruction handler also runs on macOS/Linux under Rosetta/ELF
+		// where VirtualQuery is not the host memory API. Use the same fault-safe
+		// process readers as the rest of the diagnostics code on those platforms.
+		if (OperatingSystem.IsMacOS())
+		{
+			return TryReadMacOsMemory(address, (byte*)&value, sizeof(ulong));
+		}
+
+		if (OperatingSystem.IsLinux())
+		{
+			return TryReadLinuxMemory(address, (byte*)&value, sizeof(ulong));
+		}
+
 		if (VirtualQuery((void*)address, out var lpBuffer, (nuint)sizeof(MEMORY_BASIC_INFORMATION64)) == 0)
 		{
 			return false;
