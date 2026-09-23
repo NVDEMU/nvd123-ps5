@@ -525,6 +525,23 @@ public sealed partial class DirectExecutionBackend
 				{
 					orbisGen2Result = DispatchBootstrapBridge();
 				}
+				else if (string.Equals(importStubEntry.Nid, "VkqLPArfFdc", StringComparison.Ordinal) &&
+					IsJoeAndMacVkqCompatibilityCall(value, value2, num3, num4, num5, num6))
+				{
+					// New Joe & Mac reaches this optional runtime service with a null first
+					// argument and a stable five-pointer descriptor shape. The title treats
+					// the service as optional; returning success lets the Unity startup path
+					// continue instead of converting the missing export into NOT_FOUND.
+					// Keep this narrowly gated until the exact retail ABI is identified.
+					if (Interlocked.Exchange(ref _joeAndMacVkqCompatibilityLogged, 1) == 0)
+					{
+						Console.Error.WriteLine(
+							$"[LOADER][INFO] Joe & Mac compatibility fallback: nid=VkqLPArfFdc " +
+							$"rsi=0x{value2:X16} rdx=0x{num3:X16} rcx=0x{num4:X16}");
+					}
+					cpuContext[CpuRegister.Rax] = 0;
+					orbisGen2Result = OrbisGen2Result.ORBIS_GEN2_OK;
+				}
 				else if (string.Equals(importStubEntry.Nid, RuntimeStubNids.KernelDynlibDlsym, StringComparison.Ordinal) ||
 					string.Equals(importStubEntry.Nid, "LwG8g3niqwA", StringComparison.Ordinal))
 				{
@@ -1498,6 +1515,22 @@ public sealed partial class DirectExecutionBackend
 			"+P6FRGH4LfA" or // memmove
 			"DfivPArhucg" or // memcmp
 			"8zTFvBIAIN8";   // memset
+
+	private static int _joeAndMacVkqCompatibilityLogged;
+
+	private static bool IsJoeAndMacVkqCompatibilityCall(
+		ulong rdi,
+		ulong rsi,
+		ulong rdx,
+		ulong rcx,
+		ulong r8,
+		ulong r9) =>
+		rdi == 0 &&
+		rsi != 0 &&
+		rdx == 0x000144CA00000000UL &&
+		rcx == 1 &&
+		r8 != 0 &&
+		r9 != 0;
 
 	private bool ShouldLogImportResult(string nid, OrbisGen2Result result)
 	{
