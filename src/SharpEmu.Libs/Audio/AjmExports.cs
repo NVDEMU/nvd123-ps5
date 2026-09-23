@@ -665,25 +665,19 @@ public static class AjmExports
             }
         }
 
-        // The control result is a normal AJM sideband result header. The current
-        // decoder can expose a valid status even when no output sideband was
-        // requested, and zero-filling prevents stale guest data from leaking.
+        // AJM's sideband result begins with { result, internal_result }, both
+        // 32-bit values. Preserve the complete 8-byte header and clear any
+        // additional requested sideband bytes to avoid stale guest data.
         if (sidebandOutput != 0 && sidebandOutputSize != 0)
         {
             var clearLength = Math.Min(sidebandOutputSize, 0x1000UL);
             var clear = new byte[checked((int)clearLength)];
+            BinaryPrimitives.WriteInt32LittleEndian(clear, status);
             if (!ctx.Memory.TryWrite(sidebandOutput, clear))
             {
                 status = Atrac9DecodeState.ResultInvalidParameter;
-            }
-
-            if (clear.Length >= 4)
-            {
                 BinaryPrimitives.WriteInt32LittleEndian(clear, status);
-                if (!ctx.Memory.TryWrite(sidebandOutput, clear))
-                {
-                    status = Atrac9DecodeState.ResultInvalidParameter;
-                }
+                _ = ctx.Memory.TryWrite(sidebandOutput, clear);
             }
         }
 
