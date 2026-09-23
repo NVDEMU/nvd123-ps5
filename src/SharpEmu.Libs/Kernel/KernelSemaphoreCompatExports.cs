@@ -406,10 +406,25 @@ public static class KernelSemaphoreCompatExports
     public static int KernelDeleteSema(CpuContext ctx)
     {
         var handle = unchecked((uint)ctx[CpuRegister.Rdi]);
-        if (!_semaphores.TryRemove(handle, out var semaphore))
+        if (!_semaphores.TryGetValue(handle, out var semaphore))
         {
             return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_NOT_FOUND);
         }
+
+        // Deleting a semaphore must release any guest threads that are already
+        // parked in sceKernelWaitSema. Removing the object without waking those
+        // continuations leaves them blocked forever because no future signal can
+        // reach the deleted semaphore's wake key. The waiter will resume through
+        // its existing continuation and report a non-success result.
+        _semaphores.TryRemove(handle, out _);
+        lock (semaphore.Gate)
+        {
+            semaphore.Count = 0;
+            Monitor.PulseAll(semaphore.Gate);
+        }
+
+        _ = GuestThreadExecution.Scheduler?.WakeBlockedThreads(
+            GetSemaphoreWakeKey(handle));
 
         if (_traceSema)
         {
