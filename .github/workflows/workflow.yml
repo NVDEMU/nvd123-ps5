@@ -11,6 +11,8 @@ name: Build and Release
       - "v*"
     branches:
       - "**"
+    paths-ignore:
+      - "updater-manifest.json"
   pull_request:
     branches:
       - main
@@ -370,6 +372,23 @@ jobs:
             gh release create nightly nightly-assets/* --target "${SHA}" --prerelease --title "NVDS5 Nightly" --notes "Latest successful main build: ${SHA}."
           fi
 
+      - name: Update updater manifest
+        shell: bash
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.sha }}
+          VERSION: ${{ needs.init.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          python3 scripts/update_updater_manifest.py             --channel nightly             --version "${VERSION}"             --sha "${SHA}"             --tag nightly             --assets-dir nightly-assets             --output updater-manifest.json
+
+          manifest_sha="$(gh api "repos/${GH_REPO}/contents/updater-manifest.json" --jq .sha)"
+          content="$(base64 -w0 updater-manifest.json)"
+
+          gh api             --method PUT             "repos/${GH_REPO}/contents/updater-manifest.json"             -f message="ci: update nightly updater manifest"             -f content="${content}"             -f sha="${manifest_sha}"             -f branch=main
+
   release:
     name: Publish GitHub Release
     needs:
@@ -524,3 +543,21 @@ jobs:
               --title "${RELEASE_NAME}" \
               --notes-file release-notes.md
           fi
+
+      - name: Update updater manifest
+        shell: bash
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.sha }}
+          VERSION: ${{ needs.init.outputs.version }}
+          RELEASE_TAG: ${{ needs.init.outputs.release-tag }}
+        run: |
+          set -euo pipefail
+
+          python3 scripts/update_updater_manifest.py             --channel stable             --version "${VERSION}"             --sha "${SHA}"             --tag "${RELEASE_TAG}"             --assets-dir release-assets             --output updater-manifest.json
+
+          manifest_sha="$(gh api "repos/${GH_REPO}/contents/updater-manifest.json" --jq .sha)"
+          content="$(base64 -w0 updater-manifest.json)"
+
+          gh api             --method PUT             "repos/${GH_REPO}/contents/updater-manifest.json"             -f message="ci: update stable updater manifest"             -f content="${content}"             -f sha="${manifest_sha}"             -f branch=main
