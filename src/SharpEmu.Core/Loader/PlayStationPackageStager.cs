@@ -8,10 +8,10 @@ using System.Text;
 namespace SharpEmu.Core.Loader;
 
 /// <summary>
-/// Stages a PS4 PKG into an application directory so the normal SELF/ELF
-/// loader can consume it. Package parsing/extraction is delegated to a
-/// user-installed PkgTool-compatible backend; SharpEmu never embeds Sony
-/// keys or attempts to defeat package protection.
+/// Stages a PS4/PS5 package into an application directory so the normal
+/// SELF/ELF loader can consume it. Existing extracted applications are
+/// handled in-process. Protected packages may use a user-supplied key file
+/// through NVDEMU_PKG_KEYS; NVDEMU never bundles proprietary platform keys.
 /// </summary>
 public static class PlayStationPackageStager
 {
@@ -38,22 +38,37 @@ public static class PlayStationPackageStager
             return true;
         }
 
-        if (!OperatingSystem.IsWindows() &&
-            !OperatingSystem.IsLinux() &&
-            !OperatingSystem.IsMacOS())
+        var keyPath = Environment.GetEnvironmentVariable("NVDEMU_PKG_KEYS");
+        if (string.IsNullOrWhiteSpace(keyPath))
+            keyPath = PlayStationPackageKeyStore.DefaultPath;
+
+        if (!PlayStationPackageKeyStore.TryLoad(keyPath, out var keys, out var keyMessage))
         {
-            message = "No supported host package backend is available.";
+            message =
+                $"[PKG][KEYS] Missing package keys. {keyMessage} " +
+                $"Add your user-supplied keys with --create-pkg-key-file, " +
+                $"then launch again. Expected file: {keyPath}";
             return false;
         }
 
-        var tool = FindPkgTool();
-        if (tool is null)
+        if (keys.Count == 0)
         {
             message =
-                "No PkgTool backend was found. Set NVDEMU_PKGTOOL to a " +
-                "PkgTool executable or place PkgTool on PATH.";
+                $"[PKG][KEYS] The package key file '{keyPath}' contains no keys. " +
+                "Add the required user-supplied key material and retry.";
             return false;
         }
+
+        // A protected retail package cannot be decrypted merely from its
+        // public header. Keep the key material in a user-owned file so a
+        // future in-process package backend can consume it without shipping
+        // platform secrets in the emulator.
+        message =
+            $"[PKG][KEYS] Loaded {keys.Count} user-supplied key(s), but this " +
+            "package requires a protected-PFS backend. No external extractor " +
+            "is invoked by NVDEMU. Existing extracted applications can still " +
+            "be launched directly.";
+        return false;
 
         var cacheRoot = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
