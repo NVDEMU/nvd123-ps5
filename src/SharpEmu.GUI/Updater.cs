@@ -20,6 +20,8 @@ public static class Updater
     // Served from GitHub's raw-content CDN, not the rate-limited REST API.
     private const string UpdaterManifestUrl =
         "https://raw.githubusercontent.com/NVDEMU/nvd123-ps5/main/updater-manifest.json";
+    private const string NightlyReleaseUrl =
+        "https://github.com/NVDEMU/nvd123-ps5/releases/download/nightly/";
     private static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(10);
     private static readonly HttpClient Http = CreateHttpClient();
 
@@ -41,7 +43,9 @@ public static class Updater
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(CheckTimeout);
 
-        var manifestUrl = $"{UpdaterManifestUrl}?v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+        var manifestUrl = channel == UpdateChannel.Nightly
+            ? $"{UpdaterManifestUrl}?channel=nightly&v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}"
+            : $"{UpdaterManifestUrl}?channel=stable&v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
         using var response = await Http.GetAsync(manifestUrl, timeout.Token);
         if (!response.IsSuccessStatusCode)
         {
