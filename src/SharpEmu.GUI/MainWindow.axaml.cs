@@ -554,6 +554,12 @@ public partial class MainWindow : Window
 
         OptionsNavHost.PointerExited += (_, _) =>
             SetOptionsNavigationIndicator(_optionsSectionIndex);
+        InstallFirmwarePupButton.Click += async (_, _) => await InstallFirmwarePupAsync();
+        InstallFirmwareFolderButton.Click += async (_, _) => await InstallFirmwareFolderAsync();
+        InstallFirmwareZipButton.Click += async (_, _) => await InstallFirmwareZipAsync();
+        RefreshFirmwareButton.Click += (_, _) => RefreshFirmwareList();
+        RefreshFirmwareList();
+
         SetOptionsSection(0);
     }
 
@@ -565,6 +571,7 @@ public partial class MainWindow : Window
         OptionsLauncherNav,
         OptionsRenderingNav,
         OptionsEnvironmentNav,
+        OptionsFirmwareNav,
         OptionsAboutNav,
     ];
 
@@ -576,6 +583,7 @@ public partial class MainWindow : Window
         OptionsLauncherPanel,
         OptionsRenderingPanel,
         OptionsEnvironmentPanel,
+        OptionsFirmwarePanel,
         OptionsAboutPanel,
     ];
 
@@ -680,6 +688,101 @@ public partial class MainWindow : Window
         if (!animate)
         {
             ConfigureNavigationIndicatorAnimation(indicator);
+        }
+    }
+
+
+    private async Task InstallFirmwarePupAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Select PS4UPDATE.PUP",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("PS4 Firmware PUP") { Patterns = ["*.PUP", "*.pup"] },
+                FilePickerFileTypes.All,
+            ],
+        });
+
+        var path = files.FirstOrDefault()?.TryGetLocalPath();
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            await InstallFirmwareSourceAsync(path);
+        }
+    }
+
+    private async Task InstallFirmwareZipAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Select firmware module ZIP",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("Firmware ZIP") { Patterns = ["*.zip", "*.ZIP"] },
+                FilePickerFileTypes.All,
+            ],
+        });
+
+        var path = files.FirstOrDefault()?.TryGetLocalPath();
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            await InstallFirmwareSourceAsync(path);
+        }
+    }
+
+    private async Task InstallFirmwareFolderAsync()
+    {
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Select firmware module folder",
+            AllowMultiple = false,
+        });
+
+        var path = folders.FirstOrDefault()?.TryGetLocalPath();
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            await InstallFirmwareSourceAsync(path);
+        }
+    }
+
+    private async Task InstallFirmwareSourceAsync(string path)
+    {
+        FirmwareInstallStatus.Text = "Processing firmware…";
+        try
+        {
+            var result = await Task.Run(() =>
+            {
+                var ok = SharpEmu.Core.Loader.PlayStationFirmwareManager.Install(
+                    path,
+                    out var installed,
+                    out var skipped,
+                    out var message);
+                return (ok, installed, skipped, message);
+            });
+
+            FirmwareInstallStatus.Text = result.message;
+            RefreshFirmwareList();
+        }
+        catch (Exception ex)
+        {
+            FirmwareInstallStatus.Text = $"Firmware installation failed: {ex.Message}";
+        }
+    }
+
+    private void RefreshFirmwareList()
+    {
+        try
+        {
+            var modules = SharpEmu.Core.Loader.PlayStationFirmwareManager.ListInstalledModules();
+            FirmwareInstalledModules.Text = modules.Count == 0
+                ? "No PS4 firmware modules are installed."
+                : string.Join(Environment.NewLine, modules);
+        }
+        catch (Exception ex)
+        {
+            FirmwareInstalledModules.Text = $"Unable to read firmware modules: {ex.Message}";
         }
     }
 
