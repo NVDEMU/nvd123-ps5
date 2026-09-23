@@ -1599,6 +1599,9 @@ public sealed partial class DirectExecutionBackend
 		var expectedPlayGoChunkEnumerationEnd =
 			string.Equals(nid, "uWIYLFkkwqk", StringComparison.Ordinal) &&
 			resultValue == unchecked((int)0x80B2000C);
+		var expectedSaveDataMemoryNotReady =
+			string.Equals(nid, "QwOO7vegnV8", StringComparison.Ordinal) &&
+			resultValue == unchecked((int)0x809F0012);
 		if (!expectedFileProbeMiss &&
 			!expectedVirtualQueryProbe &&
 			!expectedDirectMemoryQueryProbe &&
@@ -1616,7 +1619,8 @@ public sealed partial class DirectExecutionBackend
 			!expectedNetAcceptWouldBlock &&
 			!expectedUserServiceNoEvent &&
 			!expectedPrivacyInvalidParameter &&
-			!expectedPlayGoChunkEnumerationEnd)
+			!expectedPlayGoChunkEnumerationEnd &&
+			!expectedSaveDataMemoryNotReady)
 		{
 			return true;
 		}
