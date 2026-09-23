@@ -200,6 +200,50 @@ public static class KernelEventFlagCompatExports
     }
 
     [SysAbiExport(
+        Nid = "1vDaenmJtyA",
+        ExportName = "sceKernelOpenEventFlag",
+        Target = Generation.Gen4 | Generation.Gen5,
+        LibraryName = "libKernel")]
+    public static int KernelOpenEventFlag(CpuContext ctx)
+    {
+        var outAddress = ctx[CpuRegister.Rdi];
+        var nameAddress = ctx[CpuRegister.Rsi];
+        if (outAddress == 0 || nameAddress == 0 ||
+            !TryReadNullTerminatedUtf8(ctx, nameAddress, MaxEventFlagNameLength + 1, out var name))
+        {
+            return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_INVALID_ARGUMENT);
+        }
+
+        foreach (var pair in _eventFlags)
+        {
+            if (string.Equals(pair.Value.Name, name, StringComparison.Ordinal))
+            {
+                if (!ctx.TryWriteUInt64(outAddress, pair.Key))
+                {
+                    return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT);
+                }
+
+                return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_OK);
+            }
+        }
+
+        return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_NOT_FOUND);
+    }
+
+    [SysAbiExport(
+        Nid = "s9-RaxukuzQ",
+        ExportName = "sceKernelCloseEventFlag",
+        Target = Generation.Gen4 | Generation.Gen5,
+        LibraryName = "libKernel")]
+    public static int KernelCloseEventFlag(CpuContext ctx)
+    {
+        var handle = ctx[CpuRegister.Rdi];
+        return _eventFlags.ContainsKey(handle)
+            ? SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_OK)
+            : SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_NOT_FOUND);
+    }
+
+    [SysAbiExport(
         Nid = "JTvBflhYazQ",
         ExportName = "sceKernelWaitEventFlag",
         Target = Generation.Gen4 | Generation.Gen5,
@@ -232,6 +276,11 @@ public static class KernelEventFlagCompatExports
         Monitor.Enter(state.Gate);
         try
         {
+            if ((state.Attributes & AttrSingle) != 0 && state.WaitingThreads != 0)
+            {
+                return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_PERMISSION_DENIED);
+            }
+
             if (TryCompleteSatisfiedWait(ctx, state, pattern, waitMode, resultAddress, out var immediateWaitResult))
             {
                 return SetReturn(ctx, immediateWaitResult);
