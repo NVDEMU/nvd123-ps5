@@ -113,7 +113,8 @@ public static class PlayStationPackageStager
             {
                 if (LooksLikeKeyFailure(diagnostic))
                 {
-                    message = ExplainKeyRequirement(diagnostic); return false;
+                    message = ExplainKeyRequirement(diagnostic);
+                    return false;
                 }
 
                 message =
@@ -131,7 +132,8 @@ public static class PlayStationPackageStager
 
             if (LooksLikeKeyFailure(diagnostic))
             {
-                return ExplainKeyRequirement(diagnostic);
+                message = ExplainKeyRequirement(diagnostic);
+                return false;
             }
 
             message =
