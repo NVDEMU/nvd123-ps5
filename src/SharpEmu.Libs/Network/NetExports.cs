@@ -585,6 +585,18 @@ public static class NetExports
     }
 
     [SysAbiExport(
+        Nid = "v6M4txecCuo",
+        ExportName = "sceNetEtherNtostr",
+        Target = Generation.Gen4 | Generation.Gen5,
+        LibraryName = "libSceNet")]
+    public static int NetEtherNtostr(CpuContext ctx)
+    {
+        // The upstream compatibility implementation is a successful stub.
+        ctx[CpuRegister.Rax] = 0;
+        return (int)OrbisGen2Result.ORBIS_GEN2_OK;
+    }
+
+    [SysAbiExport(
         Nid = "HQOwnfMGipQ",
         ExportName = "sceNetErrnoLoc",
         Target = Generation.Gen4 | Generation.Gen5,

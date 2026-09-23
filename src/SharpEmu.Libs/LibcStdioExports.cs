@@ -375,7 +375,11 @@ public static class LibcStdioExports
 
         if (!_fileHandles.TryGetValue(handle, out var file))
         {
-            return StdioStatusFailure(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_INVALID_ARGUMENT, Ebadf);
+            // Titles can pass FILE* objects owned by their bundled libc rather than
+            // the emulator's HLE FILE table. setvbuf only changes buffering policy;
+            // treating that foreign FILE* as a successful no-op avoids crossing libc ABIs.
+            ctx[CpuRegister.Rax] = 0;
+            return (int)OrbisGen2Result.ORBIS_GEN2_OK;
         }
 
         if (mode is not FullBuffering and not LineBuffering and not NoBuffering)

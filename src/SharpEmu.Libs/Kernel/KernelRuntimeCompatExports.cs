@@ -81,6 +81,19 @@ public static class KernelRuntimeCompatExports
     private delegate ulong RdtscDelegate();
 
     [SysAbiExport(
+        Nid = "uvT2iYBBnkY",
+        ExportName = "sceKernelSync",
+        Target = Generation.Gen4 | Generation.Gen5,
+        LibraryName = "libKernel")]
+    public static int KernelSync(CpuContext ctx)
+    {
+        // sceKernelSync has no guest arguments. HLE file state is already
+        // synchronized by the emulator, so this remains a successful no-op.
+        ctx[CpuRegister.Rax] = 0;
+        return (int)OrbisGen2Result.ORBIS_GEN2_OK;
+    }
+
+    [SysAbiExport(
         Nid = "1jfXLRVzisc",
         ExportName = "sceKernelUsleep",
         Target = Generation.Gen4 | Generation.Gen5,

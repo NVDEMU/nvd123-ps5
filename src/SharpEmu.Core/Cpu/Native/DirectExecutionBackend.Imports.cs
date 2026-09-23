@@ -1516,7 +1516,7 @@ public sealed partial class DirectExecutionBackend
 		rsi != 0 &&
 		// Retail/runtime revisions observed in New Joe & Mac use several descriptor tags here.
 		// Keep this compatibility path limited to known ABI variants instead of treating every call as optional.
-		rdx is 0x000144CA00000000UL or 0x0001469800000000UL or 0x0001681800000000UL or 0x00016D1600000000UL or 0x0001714500000000UL or 0x0001723C00000000UL or 0x000179A500000000UL &&
+		rdx is 0x000144CA00000000UL or 0x0001469800000000UL or 0x0001681800000000UL or 0x00016D1600000000UL or 0x0001714500000000UL or 0x0001723C00000000UL or 0x000179A500000000UL or 0x00017AB600000000UL &&
 		rcx == 1 &&
 		r8 != 0 &&
 		r9 != 0;
@@ -1596,6 +1596,9 @@ public sealed partial class DirectExecutionBackend
 		var expectedOfflineNetworkProbe =
 			(nid is "fFxGkxF2bVo" or "oBr313PppNE") &&
 			resultValue == -1;
+		var expectedUnlinkProbeNotFound =
+			string.Equals(nid, "AUXVxWeJU-A", StringComparison.Ordinal) &&
+			result == OrbisGen2Result.ORBIS_GEN2_ERROR_NOT_FOUND;
 		if (!expectedFileProbeMiss &&
 			!expectedVirtualQueryProbe &&
 			!expectedDirectMemoryQueryProbe &&
@@ -1615,7 +1618,8 @@ public sealed partial class DirectExecutionBackend
 			!expectedPrivacyInvalidParameter &&
 			!expectedPlayGoChunkEnumerationEnd &&
 			!expectedSaveDataMemoryNotReady &&
-			!expectedOfflineNetworkProbe)
+			!expectedOfflineNetworkProbe &&
+			!expectedUnlinkProbeNotFound)
 		{
 			return true;
 		}
@@ -1895,21 +1899,62 @@ public sealed partial class DirectExecutionBackend
 			return false;
 		}
 
-		// Look back at most 64 bytes. Accept a short Jcc or near Jcc whose
-		// fall-through begins with the normal epilogue stack cleanup.
-		for (var branchOffset = 2; branchOffset <= 64; branchOffset++)
+		// Retail stack-protector failure paths normally branch around the function
+		// epilogue into "call __stack_chk_fail; ud2". Older recovery only accepted a
+		// branch whose fall-through began with "add rsp, imm8". Accept a bounded
+		// branch-to-failure layout and resume at a verified normal stack cleanup.
+		for (var branchOffset = 2; branchOffset <= 128; branchOffset++)
 		{
 			var branch = returnCode - branchOffset;
 			var branchLength = 0;
+			int branchDisplacement = 0;
+
 			if (branch[0] is >= 0x70 and <= 0x7F)
 			{
 				branchLength = 2;
+				branchDisplacement = unchecked((sbyte)branch[1]);
 			}
-			else if (branchOffset <= 62 && branch[0] == 0x0F && (branch[1] & 0xF0) == 0x80)
+			else if (branchOffset <= 122 && branch[0] == 0x0F && (branch[1] & 0xF0) == 0x80)
 			{
 				branchLength = 6;
+				branchDisplacement = BinaryPrimitives.ReadInt32LittleEndian(
+					new ReadOnlySpan<byte>(branch + 2, sizeof(int)));
 			}
 
+			if (branchLength == 0)
+			{
+				continue;
+			}
+
+			var epilogue = branch + branchLength;
+			var isStackCleanup =
+				(epilogue[0] == 0x48 && epilogue[1] == 0x83 && epilogue[2] == 0xC4 &&
+					epilogue[3] != 0 && epilogue[3] <= 0x80) ||
+				(epilogue[0] == 0x48 && epilogue[1] == 0x81 && epilogue[2] == 0xC4);
+
+			if (!isStackCleanup)
+			{
+				continue;
+			}
+
+			var branchTarget = epilogue + branchDisplacement;
+			var targetDistance = (nint)branchTarget - (nint)returnCode;
+			if (targetDistance < -16 || targetDistance > 16)
+			{
+				continue;
+			}
+
+			recoveredReturn = unchecked((ulong)(nint)epilogue);
+			return true;
+		}
+
+		// Keep the old adjacent-epilogue path as a fallback for unusual branch
+		// encodings whose target cannot be reconstructed safely above.
+		for (var branchOffset = 2; branchOffset <= 64; branchOffset++)
+		{
+			var branch = returnCode - branchOffset;
+			var branchLength = branch[0] is >= 0x70 and <= 0x7F ? 2 :
+				(branchOffset <= 62 && branch[0] == 0x0F && (branch[1] & 0xF0) == 0x80 ? 6 : 0);
 			if (branchLength == 0)
 			{
 				continue;

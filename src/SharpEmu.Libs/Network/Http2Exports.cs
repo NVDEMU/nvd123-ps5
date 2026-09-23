@@ -190,6 +190,25 @@ public static class Http2Exports
     }
 
     [SysAbiExport(
+        Nid = "FSAFOzi0FpM",
+        ExportName = "sceHttp2SetRequestContentLength",
+        Target = Generation.Gen4 | Generation.Gen5,
+        LibraryName = "libSceHttp2")]
+    public static int Http2SetRequestContentLength(CpuContext ctx)
+    {
+        var requestId = unchecked((int)ctx[CpuRegister.Rdi]);
+        var contentLength = ctx[CpuRegister.Rsi];
+        if (!Requests.TryGetValue(requestId, out var request))
+        {
+            return ctx.SetReturn(Http2ErrorInvalidId);
+        }
+
+        Requests[requestId] = request with { ContentLength = contentLength };
+        TraceHttp2("set_content_length", requestId, contentLength, 0, 0, 0);
+        return ctx.SetReturn(0);
+    }
+
+    [SysAbiExport(
         ExportName = "sceHttp2DeleteRequest",
         Target = Generation.Gen5,
         LibraryName = "libSceHttp2")]
