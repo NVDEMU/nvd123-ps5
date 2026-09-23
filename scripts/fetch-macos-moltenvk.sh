@@ -11,7 +11,7 @@
 #        (default output: artifacts/bin/Debug/net10.0/osx-x64)
 set -euo pipefail
 
-MVK_VERSION="${MVK_VERSION:-v1.4.0}"
+MVK_VERSION="${MVK_VERSION:-v1.4.2}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${1:-$REPO_ROOT/artifacts/bin/Debug/net10.0/osx-x64}"
 
