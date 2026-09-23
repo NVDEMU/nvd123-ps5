@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "stable": {
+    "version": "0.0.4",
+    "sha": "4094f30",
+    "tag": "v0.0.4",
+    "assets": {
+      "linux-x64": {
+        "name": "nvds5-0.0.4-linux-x64.tar.gz",
+        "url": "https://github.com/NVDEMU/nvd123-ps5/releases/download/v0.0.4/nvds5-0.0.4-linux-x64.tar.gz",
+        "size": 61720642,
+        "sha256": "0a62ae0f18268899fcb5ce306b5ae05a1b51811bf9e8bf1af7e89656391c313d"
+      },
+      "osx-x64": {
+        "name": "nvds5-0.0.4-osx-x64.zip",
+        "url": "https://github.com/NVDEMU/nvd123-ps5/releases/download/v0.0.4/nvds5-0.0.4-osx-x64.zip",
+        "size": 72576680,
+        "sha256": "d1c91155127ad2300744b6d11bffda65aa7b75fca56376c4de055fadfcb7f877"
+      },
+      "win-x64": {
+        "name": "nvds5-0.0.4-win-x64.zip",
+        "url": "https://github.com/NVDEMU/nvd123-ps5/releases/download/v0.0.4/nvds5-0.0.4-win-x64.zip",
+        "size": 60038000,
+        "sha256": "fe8ee190c527862aeb13724042813e03e6781bcd1b57cd98d291d796d1204c70"
+      }
+    }
+  },
+  "nightly": {
+    "version": "0.0.5",
+    "sha": "ec8b275",
+    "tag": "nightly",
+    "assets": {
+      "linux-x64": {
+        "name": "nvds5-nightly-linux-x64.tar.gz",
+        "url": "https://github.com/NVDEMU/nvd123-ps5/releases/download/nightly/nvds5-nightly-linux-x64.tar.gz",
+        "size": 61736783,
+        "sha256": "7ad1193e466afaa55dc0c37020de7c758b2b3fb25745522b9f91e980bbce98f8"
+      },
+      "osx-x64": {
+        "name": "nvds5-nightly-osx-x64.zip",
+        "url": "https://github.com/NVDEMU/nvd123-ps5/releases/download/nightly/nvds5-nightly-osx-x64.zip",
+        "size": 72578200,
+        "sha256": "323af1304dab18a5a20d87776f431ee9997e7034cf1b116e124733784a7132a1"
+      },
+      "win-x64": {
+        "name": "nvds5-nightly-win-x64.zip",
+        "url": "https://github.com/NVDEMU/nvd123-ps5/releases/download/nightly/nvds5-nightly-win-x64.zip",
+        "size": 60052382,
+        "sha256": "7e78e6fba758ff734224ad34f8a21863869eadb1f1750c0d010bb6cfc02ab946"
+      }
+    }
+  }
+}
