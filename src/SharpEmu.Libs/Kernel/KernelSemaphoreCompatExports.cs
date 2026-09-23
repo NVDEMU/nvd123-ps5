@@ -132,6 +132,11 @@ public static class KernelSemaphoreCompatExports
             semaphore.WaitingThreads++;
         }
 
+        // A guest thread that is about to park can otherwise leave a ready
+        // producer stranded in the scheduler queue. Kick ready work before
+        // yielding so semaphore hand-offs made during startup can complete.
+        GuestThreadExecution.Scheduler?.Pump(ctx, "sema-wait");
+
         // Block cooperatively: the wake predicate atomically acquires the
         // tokens (so a wake commits the acquisition), while the resume
         // handler distinguishes a real acquisition from a deadline expiry.
