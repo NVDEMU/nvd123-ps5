@@ -238,7 +238,12 @@ public sealed class CpuDispatcher : ICpuDispatcher, IDisposable
                 return FailEarly(OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT);
             }
 
-            if (!InitializeProcessEntryFrame(context, processImageName, programExitHandlerStubAddress))
+            if (!InitializeProcessEntryFrame(
+                    context,
+                    entryPoint,
+                    generation,
+                    processImageName,
+                    programExitHandlerStubAddress))
             {
                 return FailEarly(OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT);
             }
@@ -440,28 +445,30 @@ public sealed class CpuDispatcher : ICpuDispatcher, IDisposable
 
     private static bool InitializeProcessEntryFrame(
         CpuContext context,
+        ulong entryPoint,
+        Generation generation,
         string processImageName,
         ulong programExitHandlerAddress)
     {
         var imageName = string.IsNullOrWhiteSpace(processImageName) ? "eboot.bin" : processImageName;
-        var arguments = new List<string>(3) { imageName };
+        var maxArguments = generation == Generation.Gen4 ? 33 : 3;
+        var arguments = new List<string>(maxArguments) { imageName };
         var configuredArguments = Environment.GetEnvironmentVariable("SHARPEMU_GUEST_ARGS");
         if (!string.IsNullOrWhiteSpace(configuredArguments))
         {
-            // The PS5 entry-parameter ABI exposes three inline argv pointers.
-            // Two compatibility arguments are therefore safe without changing
-            // the fixed 0x20-byte structure expected by existing titles.
+            // The native PS4 ABI exposes EntryParams with argv[33]. PS5 keeps
+            // the existing compact three-pointer compatibility structure.
             var compatibilityArguments = configuredArguments.Split(
                 (char[]?)null,
                 StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            arguments.AddRange(compatibilityArguments.Take(2));
+            arguments.AddRange(compatibilityArguments.Take(maxArguments - 1));
         }
 
         var cursor = context[CpuRegister.Rsp];
         var argumentAddresses = new ulong[arguments.Count];
         for (var index = arguments.Count - 1; index >= 0; index--)
         {
-            var encoded = Encoding.UTF8.GetBytes(arguments[index] + '\0');
+            var encoded = Encoding.UTF8.GetBytes(arguments[index] + ' ');
             cursor = AlignDown(cursor - (ulong)encoded.Length, 16);
             if (!context.Memory.TryWrite(cursor, encoded))
             {
@@ -471,19 +478,68 @@ public sealed class CpuDispatcher : ICpuDispatcher, IDisposable
             argumentAddresses[index] = cursor;
         }
 
-        const ulong entryParamsSize = 0x20;
-        var entryParamsAddress = AlignDown(cursor - entryParamsSize, 16);
-        if (!TryWriteUInt32(context, entryParamsAddress + 0x00, (uint)arguments.Count) ||
-            !TryWriteUInt32(context, entryParamsAddress + 0x04, 0) ||
-            !context.TryWriteUInt64(entryParamsAddress + 0x08, argumentAddresses[0]) ||
-            !context.TryWriteUInt64(
-                entryParamsAddress + 0x10,
-                argumentAddresses.Length > 1 ? argumentAddresses[1] : 0) ||
-            !context.TryWriteUInt64(
-                entryParamsAddress + 0x18,
-                argumentAddresses.Length > 2 ? argumentAddresses[2] : 0))
+        ulong entryParamsAddress;
+        if (generation == Generation.Gen4)
         {
-            return false;
+            // Matches shadPS4's EntryParams:
+            // int argc; u32 padding; const char* argv[33]; VAddr entry_addr.
+            const ulong entryParamsSize = 0x118;
+            entryParamsAddress = AlignDown(cursor - entryParamsSize, 16);
+            if (!TryWriteUInt32(context, entryParamsAddress + 0x00, (uint)arguments.Count) ||
+                !TryWriteUInt32(context, entryParamsAddress + 0x04, 0) ||
+                !context.TryWriteUInt64(entryParamsAddress + 0x110, entryPoint))
+            {
+                return false;
+            }
+
+            for (var index = 0; index < 33; index++)
+            {
+                var address = index < argumentAddresses.Length ? argumentAddresses[index] : 0UL;
+                if (!context.TryWriteUInt64(
+                        entryParamsAddress + 0x08 + ((ulong)index * 8UL),
+                        address))
+                {
+                    return false;
+                }
+            }
+
+            // The Orbis startup sequence leaves argc/padding and argv[0] on
+            // the initial stack in addition to passing EntryParams in RDI.
+            var bootstrapRsp = AlignDown(entryParamsAddress - 0x10, 16);
+            if (!context.TryWriteUInt64(bootstrapRsp + 0x00, (ulong)arguments.Count) ||
+                !context.TryWriteUInt64(
+                    bootstrapRsp + 0x08,
+                    argumentAddresses.Length != 0 ? argumentAddresses[0] : 0))
+            {
+                return false;
+            }
+
+            context[CpuRegister.Rsp] = bootstrapRsp;
+        }
+        else
+        {
+            const ulong entryParamsSize = 0x20;
+            entryParamsAddress = AlignDown(cursor - entryParamsSize, 16);
+            if (!TryWriteUInt32(context, entryParamsAddress + 0x00, (uint)arguments.Count) ||
+                !TryWriteUInt32(context, entryParamsAddress + 0x04, 0) ||
+                !context.TryWriteUInt64(entryParamsAddress + 0x08, argumentAddresses[0]) ||
+                !context.TryWriteUInt64(
+                    entryParamsAddress + 0x10,
+                    argumentAddresses.Length > 1 ? argumentAddresses[1] : 0) ||
+                !context.TryWriteUInt64(
+                    entryParamsAddress + 0x18,
+                    argumentAddresses.Length > 2 ? argumentAddresses[2] : 0))
+            {
+                return false;
+            }
+
+            var entryStackPointer = entryParamsAddress - sizeof(ulong);
+            if (!context.TryWriteUInt64(entryStackPointer, 0))
+            {
+                return false;
+            }
+
+            context[CpuRegister.Rsp] = entryStackPointer;
         }
 
         if (arguments.Count > 1)
@@ -492,13 +548,6 @@ public sealed class CpuDispatcher : ICpuDispatcher, IDisposable
                 $"[DISPATCHER] Guest arguments: {string.Join(' ', arguments.Skip(1))}");
         }
 
-        var entryStackPointer = entryParamsAddress - sizeof(ulong);
-        if (!context.TryWriteUInt64(entryStackPointer, 0))
-        {
-            return false;
-        }
-
-        context[CpuRegister.Rsp] = entryStackPointer;
         context[CpuRegister.Rdi] = entryParamsAddress;
         context[CpuRegister.Rsi] = programExitHandlerAddress;
         context[CpuRegister.Rdx] = 0;
@@ -507,7 +556,6 @@ public sealed class CpuDispatcher : ICpuDispatcher, IDisposable
         context[CpuRegister.R9] = 0;
         return true;
     }
-
     private static bool InitializeModuleInitializerFrame(CpuContext context)
     {
         context[CpuRegister.Rdi] = 0;
