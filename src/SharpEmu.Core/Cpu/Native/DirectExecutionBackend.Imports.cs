@@ -1561,6 +1561,13 @@ public sealed partial class DirectExecutionBackend
 		var expectedFopenProbeMiss =
 			string.Equals(nid, "xeYO4u7uyJ0", StringComparison.Ordinal) &&
 			result == OrbisGen2Result.ORBIS_GEN2_ERROR_NOT_FOUND;
+		// sceAvPlayerInit returns a 64-bit guest handle. The import result is
+		// sampled as a signed 32-bit value by the loader, so a perfectly valid
+		// handle whose low word has bit 31 set appears negative (for example
+		// 0xDAFFE000).
+		var expectedAvPlayerHandle =
+			string.Equals(nid, "aS66RI0gGgo", StringComparison.Ordinal) &&
+			resultValue < 0;
 		var expectedTimedWaitTimeout =
 			string.Equals(nid, "27bAgiJmOh0", StringComparison.Ordinal) &&
 			unchecked((int)result) == 60;
@@ -1597,6 +1604,7 @@ public sealed partial class DirectExecutionBackend
 			!expectedPosixOpenMiss &&
 			!expectedMkdirAlreadyExists &&
 			!expectedFopenProbeMiss &&
+			!expectedAvPlayerHandle &&
 			!expectedTimedWaitTimeout &&
 			!expectedEqueueTimeout &&
 			!expectedJoeAndMacTelemetryTimeout &&
