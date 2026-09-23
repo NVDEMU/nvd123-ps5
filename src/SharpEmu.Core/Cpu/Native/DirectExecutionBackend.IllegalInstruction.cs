@@ -104,7 +104,8 @@ public sealed partial class DirectExecutionBackend
         var rsp = ReadCtxU64(contextRecord, CTX_RSP);
         if (rsp < sizeof(ulong) ||
             !TryReadStackU64(rsp, out var returnRip) ||
-            !IsLikelyReturnAddress(returnRip))
+            returnRip == rip ||
+            (!IsLikelyReturnAddress(returnRip) && !IsLikelyPs5GuestReturnAddress(returnRip)))
         {
             return false;
         }
@@ -114,11 +115,17 @@ public sealed partial class DirectExecutionBackend
         WriteCtxU64(contextRecord, CTX_RAX, 0);
 
         Console.Error.WriteLine(
-            $"[LOADER][WARN] Recovered known UD2 trap stub at 0x{rip:X16}; " +
+            $"[LOADER][INFO] Recovered known UD2 trap stub at 0x{rip:X16}; " +
             $"returned to 0x{returnRip:X16}.");
         Console.Error.Flush();
         return true;
     }
+
+    // PS5 user modules are normally mapped in the 0x800000000 guest-code window.
+    // Keep this fallback narrowly scoped to the exact UD2 compatibility stub above.
+    private static bool IsLikelyPs5GuestReturnAddress(ulong address) =>
+        address >= 0x0000000800000000UL &&
+        address < 0x0000001000000000UL;
 
     private unsafe bool TryEvaluate(
         void* contextRecord,
