@@ -102,6 +102,33 @@ internal static partial class Program
             return 0;
         }
 
+        if (TryGetOptionValue(args, "--install-ps4-firmware", out var firmwareSource))
+        {
+            if (!PlayStationFirmwareManager.Install(
+                    firmwareSource,
+                    out var installed,
+                    out var skipped,
+                    out var firmwareMessage))
+            {
+                Console.Error.WriteLine($"[FIRMWARE][ERROR] {firmwareMessage}");
+                return 2;
+            }
+
+            Console.WriteLine($"[FIRMWARE] {firmwareMessage}");
+            Console.WriteLine($"[FIRMWARE] Installed modules: {installed}; skipped: {skipped}");
+            Console.WriteLine("[FIRMWARE] Modules are loaded from the user firmware directory when the PS4 runtime requests them.");
+            return 0;
+        }
+
+        if (args.Any(static argument =>
+                string.Equals(argument, "--list-ps4-firmware", StringComparison.OrdinalIgnoreCase)))
+        {
+            Console.WriteLine($"[FIRMWARE] Directory: {PlayStationFirmwareManager.DefaultDirectory}");
+            foreach (var module in PlayStationFirmwareManager.ListInstalledModules())
+                Console.WriteLine($"[FIRMWARE] {module}");
+            return 0;
+        }
+
         // --pkg-keys is intentionally handled before emulation starts so the
         // package staging layer and any future in-process backend see the same
         // user-selected key file.
@@ -1530,6 +1557,28 @@ internal static partial class Program
                 $"[LOADER][WARN] GUI video settings could not be loaded; using defaults: {exception.Message}");
             return defaults;
         }
+    }
+
+    private static bool TryGetOptionValue(string[] args, string option, out string value)
+    {
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (string.Equals(args[i], option, StringComparison.OrdinalIgnoreCase) &&
+                i + 1 < args.Length)
+            {
+                value = args[i + 1];
+                return !string.IsNullOrWhiteSpace(value);
+            }
+
+            if (args[i].StartsWith(option + "=", StringComparison.OrdinalIgnoreCase))
+            {
+                value = args[i][(option.Length + 1)..];
+                return !string.IsNullOrWhiteSpace(value);
+            }
+        }
+
+        value = string.Empty;
+        return false;
     }
 
     private static string[] NormalizePlatformArguments(string[] args, out string platform)
