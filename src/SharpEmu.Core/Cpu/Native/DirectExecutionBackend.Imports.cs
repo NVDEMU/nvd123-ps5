@@ -2125,6 +2125,14 @@ public sealed partial class DirectExecutionBackend
 			!TryResolveRuntimeSymbolAddress(ComputePsNid(symbolName), out resolvedAddress) &&
 			!TryResolveRuntimeSymbolAlias(symbolName, out resolvedAddress))
 		{
+			// Unity native plugins probe optional callbacks during startup. Joe &
+			// Mac performs these lookups through its plugin bridge; a missing
+			// optional callback is a normal negative dlsym result.
+			if (IsExpectedUnityOptionalDlsym(symbolName))
+			{
+				cpuContext[CpuRegister.Rax] = 18446744073709551615uL;
+				return OrbisGen2Result.ORBIS_GEN2_OK;
+			}
 			Console.Error.WriteLine(
 				$"[LOADER][WARN] sceKernelDlsym failed: handle=0x{cpuContext[CpuRegister.Rdi]:X} symbol='{symbolName}'");
 			cpuContext[CpuRegister.Rax] = 18446744073709551615uL;
@@ -2173,6 +2181,18 @@ public sealed partial class DirectExecutionBackend
 		BinaryPrimitives.WriteUInt64BigEndian(bigEndianValue, value);
 		return Convert.ToBase64String(bigEndianValue).TrimEnd('=').Replace('/', '-');
 	}
+
+	private static bool IsExpectedUnityOptionalDlsym(string symbolName) =>
+		symbolName is
+			"UnitySetGraphicsDevice" or
+			"UnityRenderEvent" or
+			"UnityGetAudioEffectDefinitions" or
+			"UnityPluginLoad" or
+			"UnityPluginUnload" or
+			"UnityRenderingExtEvent" or
+			"UnityRenderingExtQuery" or
+			"UnityShaderCompilerExtEvent" or
+			"UnitySetEventQueue";
 
 	private bool TryResolveRuntimeSymbolAlias(string symbolName, out ulong address)
 	{
