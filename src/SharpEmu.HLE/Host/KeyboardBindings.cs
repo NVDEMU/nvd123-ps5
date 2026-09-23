@@ -28,6 +28,12 @@ public static class KeyboardBindings
     public const string R3 = "R3";
     public const string Options = "Options";
     public const string Share = "Share";
+    public const string TouchPad = "TouchPad";
+    public const string Ps = "Ps";
+    public const string RightStickUp = "RightStickUp";
+    public const string RightStickDown = "RightStickDown";
+    public const string RightStickLeft = "RightStickLeft";
+    public const string RightStickRight = "RightStickRight";
 
     private static readonly object Gate = new();
     private static readonly Dictionary<string, int> Defaults = new(StringComparer.OrdinalIgnoreCase)
@@ -35,7 +41,8 @@ public static class KeyboardBindings
         [Up] = 0x57, [Down] = 0x53, [Left] = 0x41, [Right] = 0x44,
         [Cross] = 0x5A, [Circle] = 0x58, [Square] = 0x43, [Triangle] = 0x56,
         [L1] = 0x51, [R1] = 0x45, [L2] = 0x52, [R2] = 0x46,
-        [L3] = 0x10, [R3] = 0x11, [Options] = 0x09, [Share] = 0x20,
+        [L3] = 0x10, [R3] = 0x11, [Options] = 0x09, [Share] = 0x20, [TouchPad] = 0x54, [Ps] = 0x50,
+        [RightStickUp] = 0x49, [RightStickDown] = 0x4B, [RightStickLeft] = 0x4A, [RightStickRight] = 0x4C,
     };
 
     private static Dictionary<string, int> _bindings = new(Defaults, StringComparer.OrdinalIgnoreCase);
