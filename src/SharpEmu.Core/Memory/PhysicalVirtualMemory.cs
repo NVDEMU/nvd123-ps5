@@ -1290,7 +1290,12 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
                 }
             }
 
-            address = reservedCandidate;
+            // FindFreeAddress() is an optimization and may become stale while
+            // the search advances past occupied host regions. Never return a
+            // cached candidate that is below the current search position: doing
+            // so violates the AtOrAbove contract and can place a mapping inside
+            // an earlier guest reservation on Windows.
+            address = reservedCandidate >= start ? reservedCandidate : 0;
             return address != 0;
         }
         finally
