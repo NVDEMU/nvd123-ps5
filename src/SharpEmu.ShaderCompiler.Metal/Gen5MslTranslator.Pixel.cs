@@ -367,9 +367,12 @@ public static partial class Gen5MslTranslator
                 var offsetLod = explicitLod && !hasGradients ? lod : "0.0f";
                 var mipLevel = Temp("uint", $"(uint)max((int)({offsetLod}), 0)");
                 coordinates = Temp(
-                    "float2",
-                    $"{coordinates} + float2((float){offsetX} / (float){texture}.get_width({mipLevel}), " +
-                    $"(float){offsetY} / (float){texture}.get_height({mipLevel}))");
+                    hasThirdCoordinate ? "float3" : "float2",
+                    hasThirdCoordinate
+                        ? $"{coordinates} + float3((float){offsetX} / (float){texture}.get_width({mipLevel}), " +
+                          $"(float){offsetY} / (float){texture}.get_height({mipLevel}), 0.0f)"
+                        : $"{coordinates} + float2((float){offsetX} / (float){texture}.get_width({mipLevel}), " +
+                          $"(float){offsetY} / (float){texture}.get_height({mipLevel}))");
             }
 
             var samplerArguments = hasGradients
