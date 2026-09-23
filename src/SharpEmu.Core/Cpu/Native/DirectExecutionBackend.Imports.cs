@@ -154,13 +154,17 @@ public sealed partial class DirectExecutionBackend
 		out OrbisGen2Result result)
 	{
 		result = OrbisGen2Result.ORBIS_GEN2_ERROR_NOT_FOUND;
-		if (cpuContext.TargetGeneration != Generation.Gen4 ||
-			!Aerolib.Instance.TryGetByNid(importStubEntry.Nid, out var symbol))
+		if (cpuContext.TargetGeneration != Generation.Gen4)
 		{
 			return false;
 		}
 
-		var name = symbol.ExportName;
+		var catalogKnown = Aerolib.Instance.TryGetByNid(
+			importStubEntry.Nid,
+			out var symbol);
+		var name = catalogKnown && symbol is not null
+			? symbol.ExportName
+			: importStubEntry.Nid;
 
 		// PS4 GNM is the graphics ABI used by retail games. NVDEMU's renderer
 		// already has a guest command-stream submission path behind AGC, so route
@@ -254,7 +258,8 @@ public sealed partial class DirectExecutionBackend
 		if (logFallback)
 		{
 			Console.Error.WriteLine(
-				$"[PS4][HLE-FALLBACK] {name} ({importStubEntry.Nid}) -> 0x{returnValue:X16}");
+				$"[PS4][HLE-FALLBACK] {(catalogKnown ? name : "unknown-nid")} " +
+				$"({importStubEntry.Nid}) -> 0x{returnValue:X16}");
 		}
 		return true;
 	}
