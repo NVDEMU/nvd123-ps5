@@ -873,7 +873,7 @@ public static class PadExports
         if (input.IsKeyDown(0x46)) buttons |= OrbisPadButton.R2;                                // F (digital)
         // Options (Start)
         if (input.IsKeyDown(0x09) || input.IsKeyDown(0x08)) buttons |= OrbisPadButton.Options;  // Tab / Backspace
-        if (input.IsKeyDown(0x20)) buttons |= OrbisPadButton.Create;                             // Space
+        if (input.IsKeyDown(0x20)) buttons |= OrbisPadButton.Share;                              // Space
         if (input.IsKeyDown(0x10)) buttons |= OrbisPadButton.L3;                                // Shift
         if (input.IsKeyDown(0x11)) buttons |= OrbisPadButton.R3;                                // Ctrl
         return buttons;
