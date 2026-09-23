@@ -2082,7 +2082,7 @@ public partial class MainWindow : Window
                 {
                     foreach (var file in Directory.EnumerateFiles(folder, pattern, enumeration))
                     {
-                        if (!PlayStationPackage.TryReadInfo(file, out var packageInfo))
+                        if (!SharpEmu.Core.Loader.PlayStationPackage.TryReadInfo(file, out var packageInfo))
                         {
                             continue;
                         }
@@ -2099,7 +2099,7 @@ public partial class MainWindow : Window
                         string? coverSource = null;
                         string? backgroundSource = null;
 
-                        if (PlayStationPackage.TryResolveExtractedApplication(
+                        if (SharpEmu.Core.Loader.PlayStationPackage.TryResolveExtractedApplication(
                                 fullPath,
                                 out var extractedEboot,
                                 out _))
