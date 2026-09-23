@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 SharpEmu Emulator Project
+SPDX-License-Identifier: GPL-2.0-or-later
+-->
+
 # NVDEMU PKG support
 
 NVDEMU recognizes PlayStation 4 `\\x7FCNT` packages and PlayStation 5 `\\x7FFIH` packages before launching them.
