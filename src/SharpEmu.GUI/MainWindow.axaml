@@ -1409,6 +1409,51 @@ SPDX-License-Identifier: GPL-2.0-or-later
                 </StackPanel>
               </ScrollViewer>
 
+              <ScrollViewer x:Name="OptionsFirmwarePanel"
+                            Classes="optionsSectionPanel">
+                <StackPanel Spacing="12">
+                  <Border Classes="optionsGroup">
+                    <StackPanel Spacing="10">
+                      <TextBlock Classes="optionsGroupHeader" Text="PS4 Firmware" />
+                      <TextBlock Text="Install user-provided PS4 firmware or firmware modules for PS4 compatibility. NVDEMU does not download firmware." TextWrapping="Wrap" Foreground="{StaticResource SettingsDescriptionBrush}" />
+                      <WrapPanel ItemWidth="230" ItemHeight="52" Orientation="Horizontal">
+                        <Button x:Name="InstallFirmwarePupButton" Classes="gameAction" Margin="0,0,10,10">
+                          <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Classes="materialSymbol" Text="system_update_alt" />
+                            <TextBlock Text="Install PS4 PUP" VerticalAlignment="Center" />
+                          </StackPanel>
+                        </Button>
+                        <Button x:Name="InstallFirmwareFolderButton" Classes="gameAction" Margin="0,0,10,10">
+                          <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Classes="materialSymbol" Text="folder_open" />
+                            <TextBlock Text="Install Module Folder" VerticalAlignment="Center" />
+                          </StackPanel>
+                        </Button>
+                        <Button x:Name="InstallFirmwareZipButton" Classes="gameAction" Margin="0,0,10,10">
+                          <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Classes="materialSymbol" Text="archive" />
+                            <TextBlock Text="Install Module ZIP" VerticalAlignment="Center" />
+                          </StackPanel>
+                        </Button>
+                        <Button x:Name="RefreshFirmwareButton" Classes="gameAction" Margin="0,0,10,10">
+                          <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Classes="materialSymbol" Text="refresh" />
+                            <TextBlock Text="Refresh Firmware List" VerticalAlignment="Center" />
+                          </StackPanel>
+                        </Button>
+                      </WrapPanel>
+                      <TextBlock x:Name="FirmwareInstallStatus" Text="Ready." TextWrapping="Wrap" Foreground="{StaticResource SettingsDescriptionBrush}" />
+                    </StackPanel>
+                  </Border>
+                  <Border Classes="optionsGroup">
+                    <StackPanel Spacing="8">
+                      <TextBlock Classes="optionsGroupHeader" Text="Installed Modules" />
+                      <TextBlock x:Name="FirmwareInstalledModules" Text="No PS4 firmware modules are installed." FontFamily="Consolas,monospace" TextWrapping="Wrap" />
+                    </StackPanel>
+                  </Border>
+                </StackPanel>
+              </ScrollViewer>
+
               <ScrollViewer x:Name="OptionsAboutPanel"
                             Classes="optionsSectionPanel">
                 <StackPanel>
