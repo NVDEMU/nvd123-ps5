@@ -33,6 +33,9 @@ public sealed partial class DirectExecutionBackend
 	private const int ImportVectorRegisterCount = 8;
 	private const ulong StackCheckGuardValue = 0xC0DEC0DECAFEBA00UL;
 	private static long _canaryReturnRecoveries;
+	private static int _nextPs4SyntheticHandle = 0x100;
+	private readonly object _ps4FallbackLogGate = new();
+	private readonly HashSet<string> _ps4FallbacksLogged = new(StringComparer.Ordinal);
 
 	private readonly object _importResultLogSampleGate = new();
 	private readonly Dictionary<string, int> _importResultLogSamples = new(StringComparer.Ordinal);
@@ -141,6 +144,100 @@ public sealed partial class DirectExecutionBackend
 				$"rbp=0x{interruptedFrame:X16} caller_rbp=0x{callerRbp:X16} " +
 				$"caller=0x{callerReturn:X16}");
 			Console.Error.Flush();
+		}
+		return true;
+	}
+
+	private bool TryDispatchPs4CompatibilityFallback(
+		ImportStubEntry importStubEntry,
+		CpuContext cpuContext,
+		out OrbisGen2Result result)
+	{
+		result = OrbisGen2Result.ORBIS_GEN2_ERROR_NOT_FOUND;
+		if (cpuContext.TargetGeneration != Generation.Gen4 ||
+			!Aerolib.Instance.TryGetByNid(importStubEntry.Nid, out var symbol))
+		{
+			return false;
+		}
+
+		var name = symbol.ExportName;
+		var shouldSucceed = true;
+		ulong returnValue = 0;
+
+		// shadPS4's linker deliberately permits unresolved userland imports to
+		// resolve through CommonStub/HLE while a concrete implementation is added.
+		// Do the same for Gen4 so one missing optional syscall does not kill a
+		// title before its real subsystem can be reached.
+		switch (name)
+		{
+			case "sceKernelIsMainThread":
+			case "sceKernelIsAddressSanitizable":
+				returnValue = 1;
+				break;
+
+			case "sceKernelGetTscFrequency":
+				returnValue = 1_000_000_000UL;
+				break;
+
+			case "sceKernelReadTsc":
+			case "sceKernelGetProcessTimeCounter":
+			case "sceKernelGetProcessTime":
+			case "sceKernelGetCpuFrequency":
+				returnValue = unchecked((ulong)Stopwatch.GetTimestamp());
+				break;
+
+			case "sceVideoOutOpen":
+			case "scePadOpen":
+			case "scePadOpenExt":
+			case "sceAudioOutOpen":
+			case "sceAudio3dPortOpen":
+			case "sceNgs2SystemCreate":
+			case "sceNgs2SystemCreateWithAllocator":
+			case "sceKernelCreateEqueue":
+			case "sceKernelCreateEventFlag":
+			case "sceKernelCreateMutex":
+			case "sceKernelCreateSema":
+			case "sceKernelCreateRwlock":
+			case "sceKernelLoadModule":
+			case "sceKernelLoadStartModule":
+				returnValue = unchecked((uint)Interlocked.Increment(ref _nextPs4SyntheticHandle));
+				break;
+
+			case "sceKernelGetModuleInfo":
+			case "sceVideoOutGetResolutionStatus":
+			case "sceVideoOutGetFlipStatus":
+			case "scePadReadState":
+			case "scePadRead":
+			case "sceAudioOutGetStatus":
+				// The concrete HLE should win for stateful structures. When it is
+				// genuinely absent, report success and leave optional output data
+				// untouched rather than fabricating a structure layout.
+				returnValue = 0;
+				break;
+
+			default:
+				// Graphics command submission, synchronization, sysmodule loading,
+				// NP/RTC helpers, and miscellaneous optional services commonly return
+				// zero on success. This fallback is intentionally PS4-only.
+				returnValue = 0;
+				break;
+		}
+
+		if (shouldSucceed)
+		{
+			cpuContext[CpuRegister.Rax] = returnValue;
+			result = OrbisGen2Result.ORBIS_GEN2_OK;
+		}
+
+		bool logFallback;
+		lock (_ps4FallbackLogGate)
+		{
+			logFallback = _ps4FallbacksLogged.Add(importStubEntry.Nid);
+		}
+		if (logFallback)
+		{
+			Console.Error.WriteLine(
+				$"[PS4][HLE-FALLBACK] {name} ({importStubEntry.Nid}) -> 0x{returnValue:X16}");
 		}
 		return true;
 	}
@@ -561,6 +658,10 @@ public sealed partial class DirectExecutionBackend
 						cpuContext[CpuRegister.Rax] = unchecked((ulong)returnValue);
 					}
 					orbisGen2Result = (OrbisGen2Result)returnValue;
+				}
+				else if (TryDispatchPs4CompatibilityFallback(importStubEntry, cpuContext, out var ps4FallbackResult))
+				{
+					orbisGen2Result = ps4FallbackResult;
 				}
 				else
 				{
