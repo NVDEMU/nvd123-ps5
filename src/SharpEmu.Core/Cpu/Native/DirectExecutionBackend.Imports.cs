@@ -1543,6 +1543,24 @@ public sealed partial class DirectExecutionBackend
 		var expectedFileProbeMiss =
 			result == OrbisGen2Result.ORBIS_GEN2_ERROR_NOT_FOUND &&
 			IsExpectedFileProbeNotFoundNid(nid);
+		// These imports are routinely used as capability/probe operations. Keep
+		// their real return values intact, but do not turn expected misses into
+		// loader warning noise.
+		var expectedVirtualQueryProbe =
+			string.Equals(nid, "rVjRvHJ0X6c", StringComparison.Ordinal) &&
+			result == OrbisGen2Result.ORBIS_GEN2_ERROR_NOT_FOUND;
+		var expectedDirectMemoryQueryProbe =
+			string.Equals(nid, "BHouLQzh0X0", StringComparison.Ordinal) &&
+			result == OrbisGen2Result.ORBIS_GEN2_ERROR_DELETED;
+		var expectedPosixOpenMiss =
+			string.Equals(nid, "wuCroIGjt2g", StringComparison.Ordinal) &&
+			resultValue == -1;
+		var expectedMkdirAlreadyExists =
+			string.Equals(nid, "1-LFLmRFxxM", StringComparison.Ordinal) &&
+			result == OrbisGen2Result.ORBIS_GEN2_ERROR_ALREADY_EXISTS;
+		var expectedFopenProbeMiss =
+			string.Equals(nid, "xeYO4u7uyJ0", StringComparison.Ordinal) &&
+			result == OrbisGen2Result.ORBIS_GEN2_ERROR_NOT_FOUND;
 		var expectedTimedWaitTimeout =
 			string.Equals(nid, "27bAgiJmOh0", StringComparison.Ordinal) &&
 			unchecked((int)result) == 60;
@@ -1574,6 +1592,11 @@ public sealed partial class DirectExecutionBackend
 			string.Equals(nid, "uWIYLFkkwqk", StringComparison.Ordinal) &&
 			resultValue == unchecked((int)0x80B2000C);
 		if (!expectedFileProbeMiss &&
+			!expectedVirtualQueryProbe &&
+			!expectedDirectMemoryQueryProbe &&
+			!expectedPosixOpenMiss &&
+			!expectedMkdirAlreadyExists &&
+			!expectedFopenProbeMiss &&
 			!expectedTimedWaitTimeout &&
 			!expectedEqueueTimeout &&
 			!expectedJoeAndMacTelemetryTimeout &&
