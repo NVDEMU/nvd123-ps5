@@ -713,7 +713,8 @@ public static partial class Gen5MslTranslator
         }
 
         // Resolves the image an instruction reads through its class array into a texture local,
-        // with its sampler for sampling operations. Only two-dimensional images are accessible.
+        // with its sampler for sampling operations. Metal supports the 2D, 2D-array and 3D
+        // resource forms used by the Gen5 shader translator; multisampled forms remain separate.
         private bool TryResolveLayoutImage(
             Gen5ShaderInstruction instruction,
             Gen5ImageControl image,
@@ -723,6 +724,7 @@ public static partial class Gen5MslTranslator
             out bool isStorage,
             out uint dstSelect,
             out string mipLevel,
+            out ImageDimension dimension,
             out string error,
             (uint Resource, uint Element)? fixedElement = null)
         {
@@ -733,6 +735,7 @@ public static partial class Gen5MslTranslator
             isStorage = false;
             dstSelect = DescriptorConstants.IdentityImageSwizzle;
             mipLevel = "0u";
+            dimension = ImageDimension.Unknown;
             var request = _request;
             var info = request.Resources.Info;
             if (!request.Memory.TryGetIndex(instruction.Pc, 0, out var memoryIndex))
@@ -763,11 +766,13 @@ public static partial class Gen5MslTranslator
                 return false;
             }
 
-            if (imageClass.Dimension != ImageDimension.Dim2D)
+            if (imageClass.Dimension is not (ImageDimension.Dim2D or ImageDimension.Dim2DArray or ImageDimension.Dim3D))
             {
                 error = $"image dimension {imageClass.Dimension} is not supported on Metal";
                 return false;
             }
+
+            dimension = imageClass.Dimension;
 
             var element = imageClass.Resources.ToList().IndexOf((uint)resourceIndex);
             if (element < 0)
