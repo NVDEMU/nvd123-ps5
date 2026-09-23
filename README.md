@@ -6,7 +6,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 # NVDS5
 
 <p align="center">
-  <img src="https://yt3.googleusercontent.com/qoLA5TDYIn1A7xJaW0EM2Rv9dMxRMH9qxg2Xnr7remoI24n_oaCgPMmsQrMqHyO-rK9N58F8tw=s900-c-k-c0x00ffffff-no-rj" alt="NVDS5 logo" width="220">
+  <img src="https://raw.githubusercontent.com/NVDEMU/nvd123-ps5/main/assets/images/logo_transparent.png" alt="NVDS5 logo" width="220">
 </p>
 
 <p align="center">
