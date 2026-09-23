@@ -162,6 +162,18 @@ public sealed class NpUniversalDataSystemExportsTests : IDisposable
     }
 
     [Fact]
+    public void OfflineCompatibility_PostEventAllowsPreRegistrationTelemetry()
+    {
+        Assert.True(NpUniversalDataSystemState.TryInitializeOfflineForCompatibility());
+        Assert.True(NpUniversalDataSystemState.TryCreateContext(0x10000000, 0, 0, out var context));
+        Assert.True(NpUniversalDataSystemState.TryCreateServiceHandle(out var serviceHandle));
+        Assert.True(NpUniversalDataSystemState.TryCreateEvent("offline", 0, false, out var eventHandle, out _));
+
+        Assert.True(NpUniversalDataSystemState.PostEvent(context, serviceHandle, eventHandle, 0));
+        Assert.Equal(1, NpUniversalDataSystemState.PostedEventCountForTests);
+    }
+
+    [Fact]
     public void PostEvent_RejectsUnregisteredAndAbortedHandles()
     {
         Initialize();
