@@ -686,14 +686,30 @@ public static partial class Gen5MslTranslator
 
                 var candidates = info.Images[(int)imageInfo.IndirectRoot].IndirectResources;
                 var candidateElements = new List<(uint Resource, uint Element)>();
+                ImageDimension? indirectDimension = null;
+                DescriptorBindingKind? indirectBindingKind = null;
                 foreach (var candidate in candidates)
                 {
-                    var candidateKind = ImageDescriptorBinding.ForImage(info.Images[(int)candidate]);
+                    var candidateInfo = info.Images[(int)candidate];
+                    var candidateKind = ImageDescriptorBinding.ForImage(candidateInfo);
                     if (candidateKind is null || !_imageClasses.TryGetValue(candidateKind.Value, out var candidateClass))
                     {
                         error = $"indirect candidate {candidate} has no declared binding class";
                         return false;
                     }
+
+                    if (indirectDimension is null)
+                    {
+                        indirectDimension = candidateInfo.Dimension;
+                        indirectBindingKind = candidateKind.Value;
+                    }
+                    else if (candidateInfo.Dimension != indirectDimension.Value ||
+                             candidateKind.Value != indirectBindingKind.Value)
+                    {
+                        error = "mixed-dimension or mixed-binding-class indirect image candidates are not supported on Metal";
+                        return false;
+                    }
+
                     var candidateElement = candidateClass.Resources.ToList().IndexOf(candidate);
                     if (candidateElement < 0)
                     {
