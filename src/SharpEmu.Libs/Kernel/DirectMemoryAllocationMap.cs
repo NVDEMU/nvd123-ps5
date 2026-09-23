@@ -164,7 +164,7 @@ internal sealed class DirectMemoryAllocationMap
     private void AddFreeRange(ulong address, ulong length)
     {
         var end = address + length;
-        var previousIndex = FindLastIndexAtOrBelow(_freeRanges.Keys, address);
+        var previousIndex = FindLastIndexAtOrBelow(_freeRanges, address);
         var nextIndex = previousIndex + 1;
         if (previousIndex >= 0 &&
             _freeRanges.GetKeyAtIndex(previousIndex) + _freeRanges.GetValueAtIndex(previousIndex) == address)
@@ -207,4 +207,5 @@ internal sealed class DirectMemoryAllocationMap
                 upper = middle;
         }
         return lower - 1;
-    }}
+    }
+}
