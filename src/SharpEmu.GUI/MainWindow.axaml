@@ -1157,6 +1157,12 @@ SPDX-License-Identifier: GPL-2.0-or-later
                                  Text="Environment" />
                     </Grid>
                   </Button>
+                  <Button x:Name="OptionsFirmwareNav" Classes="optionsNav">
+                    <Grid ColumnDefinitions="36,*">
+                      <TextBlock Grid.Column="0" Classes="materialSymbol optionsNavIcon" Text="system_update_alt" />
+                      <TextBlock x:Name="OptionsFirmwareNavLabel" Grid.Column="1" Classes="optionsNavLabel" Text="Firmware" />
+                    </Grid>
+                  </Button>
                   <Button x:Name="OptionsAboutNav" Classes="optionsNav">
                     <Grid ColumnDefinitions="36,*">
                       <TextBlock Grid.Column="0"
