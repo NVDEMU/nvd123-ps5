@@ -476,12 +476,24 @@ public sealed partial class DirectExecutionBackend
 		// process readers as the rest of the diagnostics code on those platforms.
 		if (OperatingSystem.IsMacOS())
 		{
-			return TryReadMacOsMemory(address, (byte*)&value, sizeof(ulong));
+			ulong temp = 0;
+			if (!TryReadMacOsMemory(address, (byte*)&temp, sizeof(ulong)))
+			{
+				return false;
+			}
+			value = temp;
+			return true;
 		}
 
 		if (OperatingSystem.IsLinux())
 		{
-			return TryReadLinuxMemory(address, (byte*)&value, sizeof(ulong));
+			ulong temp = 0;
+			if (!TryReadLinuxMemory(address, (byte*)&temp, sizeof(ulong)))
+			{
+				return false;
+			}
+			value = temp;
+			return true;
 		}
 
 		if (VirtualQuery((void*)address, out var lpBuffer, (nuint)sizeof(MEMORY_BASIC_INFORMATION64)) == 0)
