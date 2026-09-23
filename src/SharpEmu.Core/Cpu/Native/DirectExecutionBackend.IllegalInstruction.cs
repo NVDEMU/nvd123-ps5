@@ -37,6 +37,16 @@ public sealed partial class DirectExecutionBackend
 
     private unsafe bool TryRecoverIllegalInstruction(void* contextRecord, ulong rip)
     {
+        // Some PS5 ports contain a tiny noreturn compatibility/trap stub whose
+        // first bytes are UD2, followed by a dead call target and UD2/INT3
+        // padding. On Rosetta this surfaces as SIGILL/0xC000001D when a normal
+        // controller action enters the stub. Recover only this exact layout and
+        // return to the caller; never skip an arbitrary UD2 inside real code.
+        if (TryRecoverKnownUd2TrapStub(contextRecord, rip))
+        {
+            return true;
+        }
+
         if (!TryReadFaultingInstruction(rip, out var instruction))
         {
             return false;
@@ -69,6 +79,44 @@ public sealed partial class DirectExecutionBackend
                 "emulating those instructions in software.");
         }
 
+        return true;
+    }
+
+    private unsafe bool TryRecoverKnownUd2TrapStub(void* contextRecord, ulong rip)
+    {
+        Span<byte> code = stackalloc byte[16];
+        if (!TryReadExecutableBytes(rip, code) ||
+            code[0] != 0x0F || code[1] != 0x0B || // UD2
+            code[2] != 0xE8 || // CALL rel32 (dead/noreturn tail)
+            code[7] != 0x0F || code[8] != 0x0B) // second UD2
+        {
+            return false;
+        }
+
+        for (var i = 9; i < code.Length; i++)
+        {
+            if (code[i] != 0xCC)
+            {
+                return false;
+            }
+        }
+
+        var rsp = ReadCtxU64(contextRecord, CTX_RSP);
+        if (rsp < sizeof(ulong) ||
+            !TryReadStackU64(rsp, out var returnRip) ||
+            !IsLikelyReturnAddress(returnRip))
+        {
+            return false;
+        }
+
+        WriteCtxU64(contextRecord, CTX_RSP, rsp + sizeof(ulong));
+        WriteCtxU64(contextRecord, CTX_RIP, returnRip);
+        WriteCtxU64(contextRecord, CTX_RAX, 0);
+
+        Console.Error.WriteLine(
+            $"[LOADER][WARN] Recovered known UD2 trap stub at 0x{rip:X16}; " +
+            $"returned to 0x{returnRip:X16}.");
+        Console.Error.Flush();
         return true;
     }
 
