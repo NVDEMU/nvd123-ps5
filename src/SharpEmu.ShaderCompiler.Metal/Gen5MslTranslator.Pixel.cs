@@ -42,6 +42,7 @@ public static partial class Gen5MslTranslator
             bool isStorage;
             uint dstSelect;
             string mipLevel;
+            ImageDimension dimension;
             {
                 if (TryGetImageElementCases(instruction, image, out var selector, out var elements, out error))
                 {
@@ -52,8 +53,8 @@ public static partial class Gen5MslTranslator
                         Line("{");
                         _indent++;
                         var emitted =
-                            TryResolveLayoutImage(instruction, image, out texture, out samplerName, out kind, out isStorage, out dstSelect, out mipLevel, out error, elements[index]) &&
-                            EmitImageOperation(instruction, image, texture, samplerName, kind, isStorage, dstSelect, mipLevel, out error);
+                            TryResolveLayoutImage(instruction, image, out texture, out samplerName, out kind, out isStorage, out dstSelect, out mipLevel, out dimension, out error, elements[index]) &&
+                            EmitImageOperation(instruction, image, texture, samplerName, kind, isStorage, dstSelect, mipLevel, dimension, out error);
                         _indent--;
                         Line("}");
                         if (!emitted)
@@ -70,13 +71,13 @@ public static partial class Gen5MslTranslator
                     return false;
                 }
 
-                if (!TryResolveLayoutImage(instruction, image, out texture, out samplerName, out kind, out isStorage, out dstSelect, out mipLevel, out error))
+                if (!TryResolveLayoutImage(instruction, image, out texture, out samplerName, out kind, out isStorage, out dstSelect, out mipLevel, out dimension, out error))
                 {
                     return false;
                 }
             }
 
-            return EmitImageOperation(instruction, image, texture, samplerName, kind, isStorage, dstSelect, mipLevel, out error);
+            return EmitImageOperation(instruction, image, texture, samplerName, kind, isStorage, dstSelect, mipLevel, dimension, out error);
         }
 
         // One image operation over a resolved texture; its results are register writes.
@@ -89,6 +90,7 @@ public static partial class Gen5MslTranslator
             bool isStorage,
             uint dstSelect,
             string mipLevel,
+            ImageDimension dimension,
             out string error)
         {
             error = string.Empty;
@@ -114,6 +116,8 @@ public static partial class Gen5MslTranslator
                         {
                             0 => width,
                             1 => height,
+                            2 when dimension == ImageDimension.Dim2DArray => $"{texture}.get_array_size()",
+                            2 when dimension == ImageDimension.Dim3D => $"{texture}.get_depth()",
                             _ => "1u",
                         });
                 }
@@ -131,6 +135,10 @@ public static partial class Gen5MslTranslator
 
                 var x = Temp("int", $"as_type<int>({ImageIntegerAddress(image, 0)})");
                 var y = Temp("int", $"as_type<int>({ImageIntegerAddress(image, 1)})");
+                var hasZ = dimension != ImageDimension.Dim2D;
+                var z = hasZ
+                    ? Temp("int", $"as_type<int>({ImageIntegerAddress(image, 2)})")
+                    : "0";
                 var components = new string[4];
                 for (var component = 0; component < 4; component++)
                 {
@@ -146,10 +154,18 @@ public static partial class Gen5MslTranslator
                 }
 
                 // Bounds-checked, EXEC-guarded write.
-                Line($"if (exec && {x} >= 0 && {y} >= 0 && {x} < (int){texture}.get_width() && {y} < (int){texture}.get_height())");
+                var depthQuery = dimension == ImageDimension.Dim2DArray
+                    ? $"{texture}.get_array_size()"
+                    : $"{texture}.get_depth()";
+                var coordinate = dimension == ImageDimension.Dim2D
+                    ? $"uint2((uint){x}, (uint){y})"
+                    : $"uint3((uint){x}, (uint){y}, (uint){z})";
+                Line($"if (exec && {x} >= 0 && {y} >= 0 && {x} < (int){texture}.get_width() && {y} < (int){texture}.get_height() && " +
+                    $"{z} >= 0 && {z} < (int){depthQuery})");
                 Line("{");
                 _indent++;
-                Line($"{texture}.write({VectorLiteral(kind)}({components[0]}, {components[1]}, {components[2]}, {components[3]}), uint2((uint){x}, (uint){y}));");
+                Line($"{texture}.write({VectorLiteral(kind)}({components[0]}, {components[1]}, {components[2]}, {components[3]}), {coordinate});")
+
                 _indent--;
                 Line("}");
                 return true;
@@ -173,22 +189,34 @@ public static partial class Gen5MslTranslator
                 var y = Temp(
                     "uint",
                     $"(uint)clamp(as_type<int>({ImageIntegerAddress(image, 1)}), 0, (int){heightQuery} - 1)");
+                var hasZ = dimension != ImageDimension.Dim2D;
+                var depthQuery = dimension == ImageDimension.Dim2DArray
+                    ? $"{texture}.get_array_size()"
+                    : (isStorage ? $"{texture}.get_depth()" : $"{texture}.get_depth({mipLevel})");
+                var z = hasZ
+                    ? Temp(
+                        "uint",
+                        $"(uint)clamp(as_type<int>({ImageIntegerAddress(image, 2)}), 0, (int){depthQuery} - 1)")
+                    : "0u";
+                var coordinate = dimension == ImageDimension.Dim2D
+                    ? $"uint2({x}, {y})"
+                    : $"uint3({x}, {y}, {z})";
                 sampled = Temp(
                     $"vec<{kind}, 4>",
                     isStorage
-                        ? $"{texture}.read(uint2({x}, {y}))"
-                        : $"{texture}.read(uint2({x}, {y}), {mipLevel})");
+                        ? $"{texture}.read({coordinate})"
+                        : $"{texture}.read({coordinate}, {mipLevel})");
             }
             else if (instruction.Opcode.StartsWith("ImageSample", StringComparison.Ordinal))
             {
-                if (!TryEmitImageSample(instruction, image, texture, samplerName, kind, out sampled, out error))
+                if (!TryEmitImageSample(instruction, image, texture, samplerName, kind, dimension, out sampled, out error))
                 {
                     return false;
                 }
             }
             else if (instruction.Opcode.StartsWith("ImageGather4", StringComparison.Ordinal))
             {
-                if (!TryEmitImageGather(instruction, image, texture, samplerName, kind, out sampled, out error))
+                if (!TryEmitImageGather(instruction, image, texture, samplerName, kind, dimension, out sampled, out error))
                 {
                     return false;
                 }
@@ -241,11 +269,18 @@ public static partial class Gen5MslTranslator
             string texture,
             string samplerName,
             string kind,
+            ImageDimension dimension,
             out string sampled,
             out string error)
         {
             sampled = string.Empty;
             error = string.Empty;
+            if (dimension == ImageDimension.Dim3D)
+            {
+                error = "3D image gather is not supported on Metal";
+                return false;
+            }
+
             var opcode = instruction.Opcode;
             var hasOffset = opcode.EndsWith("O", StringComparison.Ordinal);
             var hasCompare = opcode.Contains("SampleC", StringComparison.Ordinal);
@@ -282,26 +317,46 @@ public static partial class Gen5MslTranslator
                 addressCursor += ImageFullAddressSlots(image);
             }
 
-            var gradientX = "float2(0.0f)";
-            var gradientY = "float2(0.0f)";
+            var is3D = dimension == ImageDimension.Dim3D;
+            var hasThirdCoordinate = dimension != ImageDimension.Dim2D;
+            var gradientX = is3D ? "float3(0.0f)" : "float2(0.0f)";
+            var gradientY = is3D ? "float3(0.0f)" : "float2(0.0f)";
             if (hasGradients)
             {
-                gradientX = Temp(
-                    "float2",
-                    $"float2({ImageFloatAddress(image, addressCursor)}, {ImageFloatAddress(image, addressCursor + 1)})");
-                gradientY = Temp(
-                    "float2",
-                    $"float2({ImageFloatAddress(image, addressCursor + 2)}, {ImageFloatAddress(image, addressCursor + 3)})");
-                addressCursor += 4;
+                if (is3D)
+                {
+                    gradientX = Temp(
+                        "float3",
+                        $"float3({ImageFloatAddress(image, addressCursor)}, {ImageFloatAddress(image, addressCursor + 1)}, {ImageFloatAddress(image, addressCursor + 2)})");
+                    gradientY = Temp(
+                        "float3",
+                        $"float3({ImageFloatAddress(image, addressCursor + 3)}, {ImageFloatAddress(image, addressCursor + 4)}, {ImageFloatAddress(image, addressCursor + 5)})");
+                    addressCursor += 6;
+                }
+                else
+                {
+                    gradientX = Temp(
+                        "float2",
+                        $"float2({ImageFloatAddress(image, addressCursor)}, {ImageFloatAddress(image, addressCursor + 1)})");
+                    gradientY = Temp(
+                        "float2",
+                        $"float2({ImageFloatAddress(image, addressCursor + 2)}, {ImageFloatAddress(image, addressCursor + 3)})");
+                    addressCursor += 4;
+                }
             }
 
-            var coordinates = Temp(
-                "float2",
-                $"float2({ImageFloatAddress(image, addressCursor)}, {ImageFloatAddress(image, addressCursor + 1)})");
+            var coordinates = hasThirdCoordinate
+                ? Temp(
+                    "float3",
+                    $"float3({ImageFloatAddress(image, addressCursor)}, {ImageFloatAddress(image, addressCursor + 1)}, {ImageFloatAddress(image, addressCursor + 2)})")
+                : Temp(
+                    "float2",
+                    $"float2({ImageFloatAddress(image, addressCursor)}, {ImageFloatAddress(image, addressCursor + 1)})");
+            var lodOffset = hasThirdCoordinate ? 3 : 2;
             var lod = hasZeroLod
                 ? "0.0f"
                 : hasLod
-                    ? Temp("float", ImageFloatAddress(image, addressCursor + 2))
+                    ? Temp("float", ImageFloatAddress(image, addressCursor + lodOffset))
                     : bias;
             if (hasOffset)
             {
@@ -318,7 +373,7 @@ public static partial class Gen5MslTranslator
             }
 
             var samplerArguments = hasGradients
-                ? $", gradient2d({gradientX}, {gradientY})"
+                ? $", {(is3D ? "gradient3d" : "gradient2d")}({gradientX}, {gradientY})"
                 : hasZeroLod || hasLod
                     ? $", level({lod})"
                     : hasBias
@@ -347,6 +402,7 @@ public static partial class Gen5MslTranslator
             string texture,
             string samplerName,
             string kind,
+            ImageDimension dimension,
             out string sampled,
             out string error)
         {
@@ -378,9 +434,13 @@ public static partial class Gen5MslTranslator
                 addressCursor += ImageFullAddressSlots(image);
             }
 
-            var coordinates = Temp(
-                "float2",
-                $"float2({ImageFloatAddress(image, addressCursor)}, {ImageFloatAddress(image, addressCursor + 1)})");
+            var coordinates = dimension == ImageDimension.Dim2DArray
+                ? Temp(
+                    "float3",
+                    $"float3({ImageFloatAddress(image, addressCursor)}, {ImageFloatAddress(image, addressCursor + 1)}, {ImageFloatAddress(image, addressCursor + 2)})")
+                : Temp(
+                    "float2",
+                    $"float2({ImageFloatAddress(image, addressCursor)}, {ImageFloatAddress(image, addressCursor + 1)})");
 
             // The gathered component is selected from the first dmask bit.
             uint component = 0;
