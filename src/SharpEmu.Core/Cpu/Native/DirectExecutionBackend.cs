@@ -6761,12 +6761,11 @@ private const int DefaultImportLoopGuardSeconds = 0;
 					MarkExecutionProgress();
 					continue;
 				}
-				if (IsExpectedBlockingImportStall(out var blockingNid, out var blockingName))
+				if (IsExpectedBlockingImportStall(out _, out _))
 				{
-					Console.Error.WriteLine(
-						$"[LOADER][WARN] No import progress for {stallWatchdogSeconds}s while waiting in {blockingName} ({blockingNid}); continuing.");
-					LogStallWatchdogSnapshot();
-					Console.Error.Flush();
+					// A thread parked in a known blocking primitive is intentional idle work.
+					// Do not turn routine semaphore/condition-variable waits into watchdog warnings
+					// or error-level stall snapshots; unexpected stalls still use the fatal path below.
 					MarkExecutionProgress();
 					continue;
 				}
