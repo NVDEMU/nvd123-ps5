@@ -265,28 +265,19 @@ public sealed partial class DirectExecutionBackend
 			}
 		}
 		// Diagnostic compatibility escape hatch for a guest stack-protector
-		// failure whose noreturn call is immediately followed by UD2.  Returning
-		// normally from the HLE export would execute that UD2; redirect this one
-		// well-known compiler epilogue back through its register/stack unwind.
-		// Keep the byte-pattern check strict so the opt-in cannot guess at an
-		// unrelated function layout.
+		// failure whose noreturn call is immediately followed by UD2. Retail
+		// compilers use several equivalent conditional-fail epilogues, so scan only
+		// the small window immediately preceding the UD2 and require the common
+		// add-to-rsp cleanup sequence before resuming the caller.
 		if (string.Equals(importStubEntry.Nid, "Ou3iL1abvng", StringComparison.Ordinal) &&
-			num7 >= 0x20)
+			TryRecoverStackCheckEpilogue(num7, argPackPtr, cpuContext, out var recoveredReturn))
 		{
-			var returnCode = (byte*)num7;
-			if (returnCode[0] == 0x0F && returnCode[1] == 0x0B &&
-				returnCode[-22] == 0x75 && returnCode[-21] == 0x0F &&
-				returnCode[-20] == 0x48 && returnCode[-19] == 0x83 &&
-				returnCode[-18] == 0xC4)
-			{
-				var recoveredReturn = num7 - 20;
-				*(ulong*)(argPackPtr + 96) = recoveredReturn;
-				cpuContext[CpuRegister.Rax] = 0;
-				Console.Error.WriteLine(
-					$"[LOADER][WARN] Recovered guest stack-check epilogue " +
-					$"ret=0x{num7:X16} -> 0x{recoveredReturn:X16}");
-				return 0;
-			}
+			*(ulong*)(argPackPtr + 96) = recoveredReturn;
+			cpuContext[CpuRegister.Rax] = 0;
+			Console.Error.WriteLine(
+				$"[LOADER][WARN] Recovered guest stack-check epilogue " +
+				$"ret=0x{num7:X16} -> 0x{recoveredReturn:X16}");
+			return 0;
 		}
 		if (_activeGuestThreadState is { } activeGuestThreadState)
 		{
@@ -1525,7 +1516,7 @@ public sealed partial class DirectExecutionBackend
 		rsi != 0 &&
 		// Retail/runtime revisions observed in New Joe & Mac use several descriptor tags here.
 		// Keep this compatibility path limited to known ABI variants instead of treating every call as optional.
-		rdx is 0x000144CA00000000UL or 0x0001469800000000UL or 0x0001681800000000UL or 0x00016D1600000000UL or 0x0001714500000000UL &&
+		rdx is 0x000144CA00000000UL or 0x0001469800000000UL or 0x0001681800000000UL or 0x00016D1600000000UL or 0x0001714500000000UL or 0x0001723C00000000UL &&
 		rcx == 1 &&
 		r8 != 0 &&
 		r9 != 0;
@@ -1880,6 +1871,65 @@ public sealed partial class DirectExecutionBackend
 		return returnSlotAddress != 0 &&
 			ActiveCpuContext is not null &&
 			ActiveCpuContext.TryWriteUInt64(returnSlotAddress, hostExit);
+	}
+
+	private unsafe static bool TryRecoverStackCheckEpilogue(
+		ulong returnRip,
+		nint argPackPtr,
+		CpuContext cpuContext,
+		out ulong recoveredReturn)
+	{
+		recoveredReturn = 0;
+		if (returnRip < 0x40)
+		{
+			return false;
+		}
+
+		var returnCode = (byte*)returnRip;
+		if (returnCode[0] != 0x0F || returnCode[1] != 0x0B)
+		{
+			return false;
+		}
+
+		// Look back at most 64 bytes. Accept a short Jcc or near Jcc whose
+		// fall-through begins with the normal epilogue stack cleanup.
+		for (var branchOffset = 2; branchOffset <= 64; branchOffset++)
+		{
+			var branch = returnCode - branchOffset;
+			var branchLength = 0;
+			if (branch[0] is >= 0x70 and <= 0x7F)
+			{
+				branchLength = 2;
+			}
+			else if (branchOffset <= 62 && branch[0] == 0x0F && (branch[1] & 0xF0) == 0x80)
+			{
+				branchLength = 6;
+			}
+
+			if (branchLength == 0)
+			{
+				continue;
+			}
+
+			var epilogue = branch + branchLength;
+			if (epilogue[0] != 0x48 || epilogue[1] != 0x83 || epilogue[2] != 0xC4)
+			{
+				continue;
+			}
+
+			var stackAdjust = epilogue[3];
+			if (stackAdjust == 0 || stackAdjust > 0x80)
+			{
+				continue;
+			}
+
+			recoveredReturn = unchecked((ulong)(nint)epilogue);
+			return true;
+		}
+
+		_ = argPackPtr;
+		_ = cpuContext;
+		return false;
 	}
 
 	private bool ShouldForceGuestExitOnImportLoop(in ImportStubEntry entry, ulong returnRip, long dispatchIndex, ulong arg0, ulong arg1)
