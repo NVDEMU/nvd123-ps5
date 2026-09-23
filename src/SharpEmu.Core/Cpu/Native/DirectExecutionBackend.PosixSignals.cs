@@ -168,24 +168,7 @@ public sealed unsafe partial class DirectExecutionBackend
 			record.ExceptionCode = DBG_PRINTEXCEPTION_C;
 			byte* contextRecord = stackalloc byte[Win64ContextSize];
 			new Span<byte>(contextRecord, Win64ContextSize).Clear();
-			if (exceptionRecoveredBadIndirectCall)
-		{
-			for (int i = 0; i < offsets.Length; i++)
-			{
-				*(ulong*)(registers + offsets[i]) = ReadCtxU64(contextRecord, CTX_RAX + i * 8);
-			}
-			if (vectorRegisters != null)
-			{
-				Buffer.MemoryCopy(
-					contextRecord + Win64ContextXmm0Offset,
-					vectorRegisters,
-					XmmBlockSize,
-					XmmBlockSize);
-			}
-			return true;
-		}
-
-		EXCEPTION_POINTERS pointers;
+			EXCEPTION_POINTERS pointers;
 			pointers.ExceptionRecord = &record;
 			pointers.ContextRecord = contextRecord;
 			_ = VectoredHandler(&pointers);
