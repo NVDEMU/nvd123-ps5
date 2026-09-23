@@ -308,9 +308,21 @@ public sealed unsafe partial class DirectExecutionBackend
 		else
 		{
 			ulong faultAddress = GetPosixFaultAddress(siginfo, registers);
+			ulong rip = ReadCtxU64(contextRecord, CTX_RIP);
+			ulong accessType = GetPosixAccessType(registers, faultAddress, rip);
+			if (faultAddress == rip &&
+				accessType == 8 &&
+				TryRecoverPosixBadIndirectCall(contextRecord, out var recoveredTarget, out var recoveredReturn))
+			{
+				Console.Error.WriteLine(
+					$"[LOADER][INFO] Recovered POSIX instruction-fetch fault: " +
+					$"bad_target=0x{faultAddress:X16} return=0x{recoveredReturn:X16} " +
+					$"target_after=0x{recoveredTarget:X16}");
+				Console.Error.Flush();
+			}
 			record.ExceptionCode = 3221225477u;
 			record.NumberParameters = 2;
-			record.ExceptionInformation[0] = GetPosixAccessType(registers, faultAddress, ReadCtxU64(contextRecord, CTX_RIP));
+			record.ExceptionInformation[0] = accessType;
 			record.ExceptionInformation[1] = faultAddress;
 		}
 
@@ -399,6 +411,29 @@ public sealed unsafe partial class DirectExecutionBackend
 		}
 
 		return (byte*)ucontext + LinuxUcontextGregsOffset;
+	}
+
+	private static unsafe bool TryRecoverPosixBadIndirectCall(
+		void* contextRecord,
+		out ulong recoveredTarget,
+		out ulong recoveredReturn)
+	{
+		recoveredTarget = ReadCtxU64(contextRecord, CTX_RIP);
+		recoveredReturn = 0;
+
+		var rsp = ReadCtxU64(contextRecord, CTX_RSP);
+		if (rsp < sizeof(ulong) ||
+			!TryFindPs5GuestReturnAddressOnStack(rsp, out var returnRip, out var returnSlot) ||
+			returnRip == recoveredTarget)
+		{
+			return false;
+		}
+
+		recoveredReturn = returnRip;
+		WriteCtxU64(contextRecord, CTX_RSP, returnSlot + sizeof(ulong));
+		WriteCtxU64(contextRecord, CTX_RIP, returnRip);
+		WriteCtxU64(contextRecord, CTX_RAX, 0);
+		return true;
 	}
 
 	private static ulong GetPosixFaultAddress(nint siginfo, byte* registers)
