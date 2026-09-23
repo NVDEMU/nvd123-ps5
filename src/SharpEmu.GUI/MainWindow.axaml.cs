@@ -2002,6 +2002,24 @@ public partial class MainWindow : Window
     /// </summary>
     private static long ComputeInstallSize(string ebootPath)
     {
+        // A PKG is itself the install artifact; do not report the size of its
+        // containing folder as though that were the game's installed size.
+        if (Path.GetExtension(ebootPath).Equals(".pkg", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                return new FileInfo(ebootPath).Length;
+            }
+            catch (Exception exception) when (
+                exception is IOException
+                    or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine(
+                    $"[GUI][WARN] Could not measure PKG '{ebootPath}': {exception.Message}");
+                return 0;
+            }
+        }
+
         var directory = Path.GetDirectoryName(ebootPath);
         if (directory is null)
         {
