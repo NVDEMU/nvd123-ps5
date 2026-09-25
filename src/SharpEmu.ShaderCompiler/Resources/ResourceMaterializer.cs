@@ -475,7 +475,7 @@ public static class ResourceMaterializer
             Enumerable.Range(0, (int)probeCount).Select(index => residue + (ulong)index * step);
         foreach (var offset in offsets)
         {
-            if (!ReadScalarBufferWord(material.Dwords, (uint)offset, 0, inputs, out var key))
+            if (!ReadScalarBufferWord(material.Dwords, (uint)offset, indirect.MaterialImmediate, inputs, out var key))
             {
                 return false;
             }
@@ -621,6 +621,21 @@ public static class ResourceMaterializer
 
     private static bool RequiresPointSampler(ImageNumericClass numericClass, uint conversionFormat) =>
         numericClass == ImageNumericClass.Sint || conversionFormat != GuestImageFormat.Invalid;
+
+    // The depth compare function (sampler word 0, bits 12..14) of the sampler paired
+    // with an image; an image sampled with comparison always has one.
+    private static int SamplerCompareFunction(ShaderResourceInfo info, MaterializedSnapshot snapshot, uint image)
+    {
+        foreach (var pair in info.SampledPairs)
+        {
+            if (pair.Image == image && pair.Sampler < snapshot.Samplers.Length && snapshot.Samplers[pair.Sampler].Length != 0)
+            {
+                return (int)((snapshot.Samplers[pair.Sampler][0] >> 12) & 0x7);
+            }
+        }
+
+        return 0;
+    }
 
     private static uint StorageMipCount(ImageResource image, ReadOnlySpan<uint> descriptor)
     {
@@ -829,6 +844,9 @@ public static class ResourceMaterializer
                 ConversionFormat = conversionFormat,
                 ShaderSwizzle = shaderSwizzle,
                 NumericClass = numericClass,
+                EmulatedCompareFunction = !storage && baseImage.DepthCompare && !GuestImageFormat.HasDepthEquivalent(format)
+                    ? SamplerCompareFunction(info, snapshot, baseIndex)
+                    : -1,
             };
         }
 
@@ -1046,6 +1064,13 @@ public static class ResourceMaterializer
             image.IndirectMappingOffset = specialized.IndirectMappingOffset;
             image.IndirectSearchIterations = specialized.IndirectSearchIterations;
             image.Cube = specialized.Cube;
+            image.EmulatedCompareFunction = specialized.EmulatedCompareFunction;
+            if (specialized.EmulatedCompareFunction >= 0)
+            {
+                // The shader compares instead; the host keeps a color view and a plain sampler.
+                image.DepthCompare = false;
+            }
+
             image.IndirectResources = [];
         }
 

@@ -72,6 +72,9 @@ public sealed class ImageResource
     public bool Written { get; set; }
     public bool Atomic { get; set; }
     public bool DepthCompare { get; set; }
+    // Guest compare function (0..7) evaluated in the shader for a depth-compare
+    // image whose format has no Vulkan depth equivalent; -1 when not emulated.
+    public int EmulatedCompareFunction { get; set; } = -1;
     public bool Cube { get; set; }
     public bool R128 { get; set; }
     public uint IndirectRoot { get; set; } = DescriptorConstants.NoIndex;
@@ -189,6 +192,8 @@ public sealed record IndirectImageSelector(
     public uint TableOffset { get; init; }
     public uint DynamicOffsetBase { get; init; }
     public uint KeyBound { get; init; }
+    // The key read's immediate offset. The hardware adds it after the 32-bit selector offset, without wrapping.
+    public uint MaterialImmediate { get; init; }
 }
 
 public sealed record DirectImageCandidate(uint Offset, uint Source);

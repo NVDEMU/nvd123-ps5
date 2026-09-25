@@ -176,7 +176,8 @@ public static partial class Gen5SpirvTranslator
             bool Multisampled,
             SpirvImageDim Dimension,
             uint ConversionFormat,
-            uint ShaderSwizzle);
+            uint ShaderSwizzle,
+            int EmulatedCompareFunction = -1);
 
         private readonly record struct SpirvVertexInput(
             uint Variable,
@@ -493,13 +494,10 @@ public static partial class Gen5SpirvTranslator
 
             var scalarArrayType = _module.TypeArray(_uintType, ScalarRegisterCount);
             var vectorArrayType = _module.TypeArray(_uintType, VectorRegisterCount);
-            var packedHalfArrayType = _module.TypeArray(_vec2Type, VectorRegisterCount);
             var privateScalarArrayPointer =
                 _module.TypePointer(SpirvStorageClass.Private, scalarArrayType);
             var privateVectorArrayPointer =
                 _module.TypePointer(SpirvStorageClass.Private, vectorArrayType);
-            var privatePackedHalfArrayPointer =
-                _module.TypePointer(SpirvStorageClass.Private, packedHalfArrayType);
             _scalarRegisters = _module.AddGlobalVariable(
                 privateScalarArrayPointer,
                 SpirvStorageClass.Private,
@@ -508,10 +506,6 @@ public static partial class Gen5SpirvTranslator
                 privateVectorArrayPointer,
                 SpirvStorageClass.Private,
                 _module.ConstantNull(vectorArrayType));
-            _packedHalfRegisters = _module.AddGlobalVariable(
-                privatePackedHalfArrayPointer,
-                SpirvStorageClass.Private,
-                _module.ConstantNull(packedHalfArrayType));
             _scc = _module.AddGlobalVariable(
                 _privateBoolPointer,
                 SpirvStorageClass.Private,
@@ -555,7 +549,6 @@ public static partial class Gen5SpirvTranslator
 
             _interfaces.Add(_scalarRegisters);
             _interfaces.Add(_vectorRegisters);
-            _interfaces.Add(_packedHalfRegisters);
             _interfaces.Add(_scc);
             _interfaces.Add(_vcc);
             _interfaces.Add(_exec);
@@ -569,7 +562,6 @@ public static partial class Gen5SpirvTranslator
             _interfaces.Add(_programActive);
             _module.AddName(_scalarRegisters, "sgpr");
             _module.AddName(_vectorRegisters, "vgpr");
-            _module.AddName(_packedHalfRegisters, "vgprPackedHalf");
 
             {
                 DeclareLayoutBindings();
@@ -1427,6 +1419,8 @@ public static partial class Gen5SpirvTranslator
                 "SWaitcnt" or
                 "SInstPrefetch" or
                 "STtraceData" or
+                // Wave scheduling priority hint; no effect on results.
+                "SSetprio" or
                 // NGG shaders bracket their exports with s_sendmsg
                 // (GS_ALLOC_REQ/DEALLOC) to reserve hardware export space;
                 // exports are translated directly, so the message is moot.
@@ -1463,6 +1457,12 @@ public static partial class Gen5SpirvTranslator
             if (instruction.Control is Gen5ImageControl image)
             {
                 return TryEmitImage(instruction, image, out error);
+            }
+
+            if (instruction.Control is Gen5RayIntersectControl rayIntersect)
+            {
+                EmitRayIntersectMiss(rayIntersect);
+                return true;
             }
 
             if (instruction.Control is Gen5GlobalMemoryControl globalMemory)
@@ -1847,12 +1847,7 @@ public static partial class Gen5SpirvTranslator
             }
             else
             {
-                broadcast = _module.AddInstruction(
-                    SpirvOp.GroupNonUniformShuffle,
-                    _uintType,
-                    UInt(3),
-                    firstValue,
-                    firstLane);
+                broadcast = ShuffleLane(firstValue, firstLane);
             }
 
             var validResult = _module.AddInstruction(
@@ -3488,6 +3483,27 @@ public static partial class Gen5SpirvTranslator
             return true;
         }
 
+        // BVH nodes are not traversed yet: every ray misses the node it is tested against.
+        // The node type sits in the low three bits of the node pointer. A box node (4-7)
+        // returns four invalid child pointers, a triangle node (0-3) returns t = +inf over
+        // a denominator of 1, so the guest's traversal loop ends with no hit.
+        private void EmitRayIntersectMiss(Gen5RayIntersectControl ray)
+        {
+            var nodeType = BitwiseAnd(LoadV(ray.GetAddressRegister(0)), UInt(7));
+            var isTriangle = _module.AddInstruction(SpirvOp.ULessThan, _boolType, nodeType, UInt(4));
+            uint[] triangleMiss = [0x7F800000u, 0x3F800000u, 0u, 0u];
+            for (var component = 0u; component < Gen5RayIntersectControl.ResultDwords; component++)
+            {
+                var value = _module.AddInstruction(
+                    SpirvOp.Select,
+                    _uintType,
+                    isTriangle,
+                    UInt(triangleMiss[component]),
+                    UInt(0xFFFFFFFFu));
+                StoreV(ray.VectorData + component, value);
+            }
+        }
+
         private bool TryEmitImage(
             Gen5ShaderInstruction instruction,
             Gen5ImageControl image,
@@ -3985,7 +4001,27 @@ public static partial class Gen5SpirvTranslator
 
                 }
 
-                if (hasCompare)
+                if (hasCompare && resource.EmulatedCompareFunction >= 0)
+                {
+                    // A color format cannot back a Vulkan depth-compare view; compare
+                    // the sampled first channel like RDNA does for such formats.
+                    var texel = _module.AddInstruction(
+                        explicitLod ? SpirvOp.ImageSampleExplicitLod : SpirvOp.ImageSampleImplicitLod,
+                        resource.VectorType,
+                        [.. operands]);
+                    var depth = EmulatedDepthCompare(
+                        reference,
+                        _module.AddInstruction(SpirvOp.CompositeExtract, _floatType, texel, 0u),
+                        resource.EmulatedCompareFunction);
+                    sampled = _module.AddInstruction(
+                        SpirvOp.CompositeConstruct,
+                        resource.VectorType,
+                        depth,
+                        depth,
+                        depth,
+                        Float(1f));
+                }
+                else if (hasCompare)
                 {
                     // The sampler carries the compare; the depth result fills x, y, z.
                     var drefOperands = new List<uint> { imageObject, coordinates, reference };
@@ -4092,13 +4128,15 @@ public static partial class Gen5SpirvTranslator
                     imageObject,
                     coordinates,
                 };
-                if (hasCompare)
+                var emulatedCompare = hasCompare && resource.EmulatedCompareFunction >= 0;
+                if (emulatedCompare)
                 {
-                    operands.Add(reference);
+                    // Gather the first channel and compare each texel in the shader.
+                    operands.Add(UInt(0));
                 }
                 else if (hasCompare)
                 {
-                    operands.Add(UInt(0));
+                    operands.Add(reference);
                 }
                 else
                 {
@@ -4133,10 +4171,24 @@ public static partial class Gen5SpirvTranslator
                 }
 
                 sampled = _module.AddInstruction(
-                    hasCompare ? SpirvOp.ImageDrefGather : SpirvOp.ImageGather,
+                    hasCompare && !emulatedCompare ? SpirvOp.ImageDrefGather : SpirvOp.ImageGather,
                     resource.VectorType,
                     [.. operands]);
-                if (!hasCompare)
+                if (emulatedCompare)
+                {
+                    var gathered = sampled;
+                    var compared = new uint[4];
+                    for (var texel = 0u; texel < 4; texel++)
+                    {
+                        compared[texel] = EmulatedDepthCompare(
+                            reference,
+                            _module.AddInstruction(SpirvOp.CompositeExtract, _floatType, gathered, texel),
+                            resource.EmulatedCompareFunction);
+                    }
+
+                    sampled = _module.AddInstruction(SpirvOp.CompositeConstruct, resource.VectorType, compared);
+                }
+                else if (!hasCompare)
                 {
                     sampled = UnpackImageGather(resource, image.Dmask, sampled);
                 }
@@ -5980,8 +6032,28 @@ public static partial class Gen5SpirvTranslator
             _module.AddInstruction(
                 SpirvOp.AccessChain,
                 _privateVec2Pointer,
-                _packedHalfRegisters,
+                PackedHalfRegisters(),
                 UInt(register));
+
+        // Declared on first use. AMD's compiler keeps an unused 4 KiB private array as a
+        // named .bss global: two stages then fail to link, and the driver copies the
+        // NOBITS section as file data and reads past the end of the ELF.
+        private uint PackedHalfRegisters()
+        {
+            if (_packedHalfRegisters != 0)
+            {
+                return _packedHalfRegisters;
+            }
+
+            var arrayType = _module.TypeArray(_vec2Type, VectorRegisterCount);
+            _packedHalfRegisters = _module.AddGlobalVariable(
+                _module.TypePointer(SpirvStorageClass.Private, arrayType),
+                SpirvStorageClass.Private,
+                _module.ConstantNull(arrayType));
+            _interfaces.Add(_packedHalfRegisters);
+            _module.AddName(_packedHalfRegisters, "vgprPackedHalf");
+            return _packedHalfRegisters;
+        }
 
         private uint LoadS(uint register) => Load(_uintType, ScalarPointer(register));
 
@@ -6164,6 +6236,36 @@ public static partial class Gen5SpirvTranslator
             return UInt(0);
         }
 
+        // Reads value from another lane of the host subgroup. Without subgroup
+        // support the invocation is a one-lane wave, so the only lane is itself;
+        // emitting the shuffle there would need a capability the module lacks.
+        // 1.0 when "reference <function> texel" holds, else 0.0. The function is the
+        // guest sampler's depth compare field, which uses VkCompareOp's order.
+        private uint EmulatedDepthCompare(uint reference, uint texel, int function)
+        {
+            SpirvOp op;
+            switch (function)
+            {
+                case 0: return Float(0f);
+                case 7: return Float(1f);
+                case 1: op = SpirvOp.FOrdLessThan; break;
+                case 2: op = SpirvOp.FOrdEqual; break;
+                case 3: op = SpirvOp.FOrdLessThanEqual; break;
+                case 4: op = SpirvOp.FOrdGreaterThan; break;
+                case 5: op = SpirvOp.FUnordNotEqual; break;
+                case 6: op = SpirvOp.FOrdGreaterThanEqual; break;
+                default: throw new InvalidOperationException($"invalid depth compare function {function}");
+            }
+
+            var passed = _module.AddInstruction(op, _boolType, reference, texel);
+            return _module.AddInstruction(SpirvOp.Select, _floatType, passed, Float(1f), Float(0f));
+        }
+
+        private uint ShuffleLane(uint value, uint lane) =>
+            _subgroupInvocationIdInput == 0
+                ? value
+                : _module.AddInstruction(SpirvOp.GroupNonUniformShuffle, _uintType, UInt(3), value, lane);
+
         private uint CurrentLaneBit()
         {
             if (_subgroupInvocationIdInput == 0)
@@ -6340,8 +6442,18 @@ public static partial class Gen5SpirvTranslator
                     mask,
                     CurrentLaneBit()));
 
-        private void StoreWaveMask(uint register, uint condition) =>
+        // In wave32 a lane mask fills its register alone and the next one keeps its value.
+        // That includes VCC and EXEC: compilers use VCC_HI (s107) as an ordinary SGPR.
+        private void StoreWaveMask(uint register, uint condition)
+        {
+            if (_waveLaneCount == 32)
+            {
+                StoreS(register, Narrow(BooleanToWaveMask(condition)));
+                return;
+            }
+
             StoreS64(register, BooleanToWaveMask(condition));
+        }
 
         private void EmitExecConditional(Action emit)
         {
@@ -6389,7 +6501,7 @@ public static partial class Gen5SpirvTranslator
             _request.Program.Instructions.Any(instruction =>
                 instruction.Control is Gen5DppControl or Gen5Dpp8Control ||
                 instruction.Opcode is "VPermlane16B32" or "VPermlanex16B32" or "VReadlaneB32" or
-                    "DsAppend" or "DsConsume" or "DsSwizzleB32");
+                    "DsAppend" or "DsConsume" or "DsSwizzleB32" or "DsBpermuteB32");
 
         private bool UsesSubgroupBroadcast() =>
             _request.Program.Instructions.Any(instruction =>
